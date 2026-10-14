@@ -1,6 +1,6 @@
 # Scope `others`: reviewing someone else's PR
 
-Read-only until the user approves comments. Nothing here edits their branch, comments, approves, or requests changes.
+Read-only until the user approves comments. Nothing here edits their branch or posts.
 
 ## 1. Seed and fetch
 
@@ -16,15 +16,14 @@ Range: `origin/<base>...<headSha>`. When the repo is not cloned locally, the rev
 - `gather-context pr <n>`: the heavy bundle (ticket, threads, history, Slack, meetings when gated). Keep the bundle path.
 - `gather-context conventions` on the repo, with the areas taken from the PR's files. Their conventions are the standard, not ours.
 - `explain <n>`: intent vs the ticket's ACs, the before-state, review thread status, and provisional risks.
-- The `reviewer` agent: the range, the conventions bundle, the ticket's ACs from the context bundle (or "none"), and, as focus, every point already raised in an open human thread, so it does not repeat them.
+- Both `reviewer` passes (thermo and correctness, see `SKILL.md`): the range, the conventions bundle, the ticket's ACs from the context bundle (or "none"), and, as focus, every point already raised in an open thread, so they do not repeat them.
 - When the PR touches UI files: the `ui` skill's review step (report only), so `web-design-guidelines` and `impeccable` critique run on the changed screens.
-- Optional `deep`: the built-in `code-review` skill on the PR at `high`, without `--comment` and without `--fix`, as an extra correctness pass.
 
 `/simplify` is not run here: it edits the working tree. The reviewer's `simplification` category covers the same ground as a report.
 
 ## 3. Triage
 
-Merge the candidates (reviewer findings, explain risks, code-review findings) into one list, deduplicate by root cause, and run every one through `triage.md`. Then:
+Merge the candidates (both reviewer passes, the UI critique, explain risks) into one list, deduplicate by root cause, and run every one through `triage.md`. Then:
 
 - **Dedupe against existing threads.** A candidate an open thread already raises becomes "already raised by @x, still open" (support it in that thread only if you have new evidence). A candidate settled by a resolved and explained thread is dropped, citing the thread.
 - **Self-grill each survivor.** Is it my preference or provable? Does it cite a codebase pattern, a written rule, an AC, or a consequence? Would the author's likely objection beat it? Then run `$CLAUDE_CONFIG_DIR/skills/brainstorm/references/self-grill.md` on the whole report.
@@ -35,7 +34,7 @@ Write `report.md` in the output directory and show it. Offer it as a private art
 
 ```markdown
 # Review: <owner/repo>#<n> <title> (@<author>, <head sha short>)
-Verdict: <comment | changes worth requesting | looks good> · Ticket: <key> · Context: <bundle path>
+Verdict: <request changes | comment | looks good> · Ticket: <key> · Context: <bundle path>
 
 ## Intent vs ACs
 <from explain: per-AC verdict (covered, partial, missing, contradicted, not judgeable from code), plus Extra>
@@ -60,4 +59,4 @@ Verdict: <comment | changes worth requesting | looks good> · Ticket: <key> · C
 
 ## 5. Comments
 
-Ask what to do next; never chain into posting. Options: draft the survivors as inline comments; raise some as tickets or a direct conversation instead; or stop because nothing is worth raising. When the user picks comments, hand the settled set (`triage.md`) and the head SHA to `post-pr-comments`, which drafts in the user's voice, verifies every suggested fix, shows the exact batch, and posts only after explicit approval.
+Ask what to do next; never chain into posting. Options: draft the survivors as inline comments; raise some as tickets or a direct conversation instead; or stop because nothing is worth raising. When the user picks comments, hand the settled set (`triage.md`), the head SHA and the review event from the verdict (`REQUEST_CHANGES` when any survivor asks for an edit, else `COMMENT`) to `post-pr-comments`, which drafts in the user's voice, verifies every suggested fix, shows the exact batch, and posts only after explicit approval.

@@ -34,6 +34,6 @@ bun $br new --worktree --detach <head sha> --name scratch-<short sha> --no-insta
 git -C <path> apply --check fix.diff && git -C <path> apply fix.diff                # diffs; for a suggestion, write the replacement into the file
 ```
 
-Then run the repo's formatter or linter on the touched files (the commands from the conventions bundle, through `nr`; installing dependencies in the scratch worktree is fine when the user agrees, never a script that touches a database), and typecheck when the repo makes that practical. Record what each fix was verified with and what was not checked. Remove the worktree afterwards: `bun $br rm scratch-<short sha> --force`.
+Then run the repo's formatter or linter on the touched files (the commands from the conventions bundle, through `nr`; installing dependencies in the scratch worktree is fine when the user agrees, never a script that touches a database), and typecheck. Monorepos often need generated workspace types before typecheck can pass (an unresolved `@scope/pkg/types` is the tell): run the repo's codegen or build script for them in the scratch worktree first. When that is impractical, typecheck the clean head, then each fix, and report "no new errors against a failing baseline of N", never a pass. Record what each fix was verified with and what was not checked. Remove the worktree afterwards: `bun $br rm scratch-<short sha> --force`.
 
 If the head SHA moves before posting, re-run the verification against the new head.

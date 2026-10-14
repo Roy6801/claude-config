@@ -34,7 +34,7 @@ gh api -X POST repos/{owner}/{repo}/pulls/{n}/reviews --input review.json
 
 Single-line comments omit `start_line` and `start_side`. Build the JSON with `jq -n --rawfile` per body so backticks and quotes in the markdown survive, and write it to the scratchpad, not the repo.
 
-- `event` is `COMMENT`. `APPROVE` or `REQUEST_CHANGES` only when the user explicitly asks.
+- `event` is `REQUEST_CHANGES` when any comment in the batch asks for an edit, otherwise `COMMENT`. `APPROVE` only when the user explicitly asks.
 - The API rejects the whole review if one anchor is not in the diff, so check anchors first.
 
 ## Replies in existing threads

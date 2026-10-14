@@ -21,7 +21,7 @@ The writing and posting stage. Everything here assumes the decisions are already
 | `replies` | approved replies from `review feedback`: thread (first comment url), label (`Fixed in <sha>:`, `Discussed:`, `Won't Fix:`), body | one reply per thread, plus an optional top-level summary comment |
 | `edit` | a posted comment's url and the change wanted | an in-place edit |
 
-**Refuse untriaged input.** A raw list from the `reviewer` agent, `thermo`, `code-review`, codex or bugbot does not get posted. Say so and point at `review others` (or `review feedback` for comments on the user's own PR). On the run this skill was built from, ten candidates produced four comments; posting all ten would have asked the author to fix four things they had already handled correctly. If the user insists on posting something untriaged, post it, but say once which checks it skipped.
+**Refuse untriaged input.** A raw list from either `reviewer` pass, `thermo`, codex or bugbot does not get posted. Say so and point at `review others` (or `review feedback` for comments on the user's own PR). On the run this skill was built from, ten candidates produced four comments; posting all ten would have asked the author to fix four things they had already handled correctly. If the user insists on posting something untriaged, post it, but say once which checks it skipped.
 
 ## Drafting
 
@@ -41,6 +41,7 @@ One comment per finding, anchored to the lines it is about. No grouped follow-up
 - Never rank which comments you want answers on. If it was not worth an answer, it was not worth posting.
 - Vary the length; some comments are two sentences.
 - Non-accusatory on reopened threads: "Codex raised this and the thread's resolved but I can't see a change to X".
+- Refer to threads by link and to code by permalink. Labels from the review state (thread numbers like T13, finding numbers, files under `state/`) mean nothing to the author; check the drafts for them before the checkpoint (`rg '\bT[0-9]+\b'`).
 
 ## Deduplicate against existing threads
 
@@ -57,9 +58,9 @@ Show what was dropped or converted, with links.
 
 Mandatory, no exceptions, including for a single comment or a one-line fix. A batch is everything one API write will send: one review in `comments` mode, the set of replies in `replies` mode, or one edit.
 
-Show every draft in full, exactly as it will appear, with its file and line anchor (or thread link) and its suggestion or diff block. Then state what will be posted, as which account (`gh api user --jq .login`), against which SHA, as which review event (`COMMENT`), and what each fix was verified with and what was not checked. Never summarise a draft instead of showing it.
+Show every draft in full, exactly as it will appear, with its file and line anchor (or thread link) and its suggestion or diff block. Then state what will be posted, as which account (`gh api user --jq .login`), against which SHA, as which review event, and what each fix was verified with and what was not checked. The event follows the content: `REQUEST_CHANGES` when any comment asks for an edit, `COMMENT` when every comment is a question or optional. State it; do not ask. Never summarise a draft instead of showing it.
 
-Approval means the user explicitly says to post this batch. It is not implied by silence, by approval at the triage checkpoint, by an earlier instruction to review the PR, or by an answer to an unrelated question. Ambiguous: ask. Partial approval is normal: post exactly the approved subset. Any change after approval, whether a rewording, a new anchor, or an added comment, resets it; show the revised batch and ask again. Expect to rewrite: voice takes iterations, and the user is the only judge of whether it sounds like them.
+Approval means the user explicitly says to post this batch. It is not implied by silence, by approval at the triage checkpoint, by an earlier instruction to review the PR, or by an answer to an unrelated question. Ambiguous: ask. Approval covers the whole batch and its stated event; post everything unless the user names exclusions. Any change after approval, whether a rewording, a new anchor, or an added comment, resets it; show the revised batch and ask again. Expect to rewrite: voice takes iterations, and the user is the only judge of whether it sounds like them.
 
 ## Posting
 
@@ -69,7 +70,7 @@ Preconditions, checked before any write:
 - `gh auth status` shows the right account for this repo.
 - The head SHA still matches the PR. If the branch moved, re-verify anchors and suggested fixes and show the batch again.
 
-Then post the batch (`references/api.md`): new comments once, as a single review with `event: COMMENT`; replies one per thread, stopping at the first failure. Afterwards verify that every comment landed under the user's login at the intended place, and report the links.
+Then post the batch (`references/api.md`): new comments once, as a single review with the stated event; replies one per thread, stopping at the first failure. Afterwards verify that every comment landed under the user's login at the intended place, and report the links.
 
 ## Editing what is already posted
 
@@ -79,7 +80,7 @@ Edit in place; never add a follow-up comment correcting yourself. The same appro
 
 - Never post anything the user has not seen in full and explicitly approved, including edits.
 - Never post a finding that has not been through the `review` skill's triage, or a suggested fix that has not been applied and checked against the head SHA.
-- `event: COMMENT` only. Never approve or request changes unless the user explicitly asks.
+- The review event follows the content (`REQUEST_CHANGES` when any comment asks for an edit, else `COMMENT`) and is stated at the checkpoint. `APPROVE` only when the user explicitly asks.
 - Never resolve a thread on someone else's PR. On the user's own PR, resolve a thread only after its reply is posted and the user said yes for that thread.
 - No AI attribution anywhere: no "Generated with", no footer, no thumbs-up prompt. No session references, links or ids in any posted text.
 - Report what was actually posted, with the links, and say plainly if anything was refused or failed.

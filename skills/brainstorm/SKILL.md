@@ -32,7 +32,7 @@ If the request is a question, a lookup, or a small fix, print one line such as `
 
 ## Full flow
 
-1. **Listen.** Let the user narrate. Take only a quick look at what they point to (a ticket, thread, PR, or error message). Deep context gathering belongs to the workflow chosen later, and heavy reading goes to agents so the main thread keeps the dialogue and decisions.
+1. **Listen.** Let the user narrate. Take only a quick look at what they point to (a ticket, thread, PR, or error message). Deep context gathering belongs to the workflow chosen later, and heavy reading goes to agents so the main thread keeps the dialogue and decisions. Before mapping, run `work.ts list` and match the PR number, ticket key, or topic against existing slugs and titles. On a match, switch to Resume: the decisions already logged stand, so ask only what they leave open.
 2. **Map.** Lay out, in a few lines, which workflows, skills, and agents from the routing table apply to this problem.
 3. **Break down.** Split the problem into small sub-problems. For each, name the workflow that handles it and the order in which they run.
 4. **Brainstorm.** List the options, what to check first, the unknowns, and your own uncertainties. Grill lightly: read `$CLAUDE_CONFIG_DIR/skills/grilling/SKILL.md` and follow its question format (numbered questions, each with your recommended answer). Ask at least one "why" question to catch an XY problem, where the user asks for Y but the underlying problem is X.

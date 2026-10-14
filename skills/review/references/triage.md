@@ -1,6 +1,15 @@
 # Triage: which findings survive
 
-Machine passes (the `reviewer` agent, `thermo`, `explain` risks, the built-in `code-review`, bots such as codex or bugbot) produce candidate findings cheaply and unreliably. A human comment on your own PR is a candidate too: it may be wrong. The user owns what gets said or changed. Triage is the loop between those two, and the measure of a good run is how many candidates die. On the run this was built from, ten candidates produced four comments, and three of the five drops came from the user pushing back.
+Machine passes (both `reviewer` passes, thermo and correctness, the `ui` critique, `explain` risks, bots such as codex or bugbot) produce candidate findings cheaply and unreliably. A human comment on your own PR is a candidate too: it may be wrong. The user owns what gets said or changed.
+
+Triage **verifies; it does not re-grade.** A candidate dies only on evidence:
+
+- the claim is false at the head SHA, or the behaviour it describes cannot happen;
+- the PR did not cause it (the baseline or the repo convention already does the same or less);
+- an existing thread already settles it;
+- a standing rule the user set (in memory or in this session) drops that class of finding.
+
+Everything else survives with the severity its pass gave it. When you disagree with a grade, or think a finding is a preference, put your view next to it with the reasoning and leave the call to the user; never lower a grade or drop a finding on judgement alone. The measure of a good run is that every survivor is true and this PR's, and every drop carries its evidence.
 
 Treat every candidate as low trust, and never present it in the same register as post-triage output. Triage reads code to test a claim, not to find new ones. If a genuinely new problem surfaces while investigating, it enters as another candidate and faces the same tests.
 
@@ -29,7 +38,7 @@ Run the checks reachable from the repo before writing a single confident sentenc
 - Can the affected population reach the code path? If not, skipping it is behaviour, not a defect.
 - Is the bad state self-correcting, or repairable by something that already exists?
 - Trace the actual consumer before claiming a change breaks it: the fallback, the join, the default.
-- Grade the consequence honestly. Stale is not lost. Recoverable is not irreversible.
+- State the consequence honestly next to the pass's grade. Stale is not lost. Recoverable is not irreversible.
 
 **Is it fixable?**
 - Look for the structural blocker before proposing a fix. A constraint, a missing endpoint, or an API shape can make the obvious suggestion impossible, which turns the comment from a request into a question.
@@ -38,7 +47,7 @@ Run the checks reachable from the repo before writing a single confident sentenc
 - Connect it to a task someone performs. A reporting gap is tidiness until it blocks a workflow the ticket says stays manual; then it is a functional gap.
 
 **Preference or provable?**
-- A finding that rests on taste, with no codebase pattern, rule, AC or consequence behind it, is a preference. Drop it, or keep it only as an explicitly optional nit.
+- A finding with no codebase pattern, rule, AC or consequence behind it is a preference. Mark it `preference` in its record and let the user decide whether it goes out.
 
 **What shape does it survive in?**
 - Fold weakened findings into stronger ones rather than raising both.
@@ -52,7 +61,7 @@ Every candidate, alive or dead, carries:
 - **Claim**: one sentence, with `file:line`.
 - **Disposition**: raise, fold into another finding, ask, or dropped (for feedback on your own PR: fix, rebut, defer, or answer).
 - **Cause**: the test that decided it, with the evidence inline: a file and line, a convention, a count, or a quote. Never a bare confidence label.
-- **Severity**: survivors only, on the scale in `$CLAUDE_CONFIG_DIR/skills/thermo/references/findings.md` (`blocker`, `major`, `minor`, `nit`), recommended with its reasoning; the user accepts or changes it.
+- **Severity**: survivors only, the grade the pass gave on the scale in `$CLAUDE_CONFIG_DIR/skills/thermo/references/findings.md` (`blocker`, `major`, `minor`, `nit`), unchanged. When you disagree, add your view and reasoning beside it; the user decides.
 - **What would change this**: the specific fact that flips the verdict, and whether it is reachable from the repo. Reachable facts are fetched now; the rest become questions for the user.
 
 Severity is independent of validity. A `blocker`-grade claim can still be dropped as someone else's problem.
