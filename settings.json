@@ -1,0 +1,205 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "DISABLE_ZOXIDE": "1"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git log *)",
+      "Bash(:*/ralph-wiggum/:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [
+      "Bash(cat *.env*)",
+      "Bash(cat **/.env*)",
+      "Bash(head *.env*)",
+      "Bash(head **/.env*)",
+      "Bash(tail *.env*)",
+      "Bash(tail **/.env*)",
+      "Bash(less *.env*)",
+      "Bash(less **/.env*)",
+      "Bash(more *.env*)",
+      "Bash(more **/.env*)",
+      "Bash(grep *.env*)",
+      "Bash(grep **/.env*)",
+      "Bash(egrep *.env*)",
+      "Bash(egrep **/.env*)",
+      "Bash(fgrep *.env*)",
+      "Bash(fgrep **/.env*)",
+      "Bash(rg *.env*)",
+      "Bash(rg **/.env*)",
+      "Bash(ag *.env*)",
+      "Bash(ag **/.env*)",
+      "Bash(sed *.env*)",
+      "Bash(sed **/.env*)",
+      "Bash(awk *.env*)",
+      "Bash(awk **/.env*)",
+      "Bash(xxd *.env*)",
+      "Bash(xxd **/.env*)",
+      "Bash(od *.env*)",
+      "Bash(od **/.env*)",
+      "Bash(strings *.env*)",
+      "Bash(strings **/.env*)",
+      "Bash(bat *.env*)",
+      "Bash(bat **/.env*)",
+      "Bash(vim *.env*)",
+      "Bash(vim **/.env*)",
+      "Bash(vi *.env*)",
+      "Bash(vi **/.env*)",
+      "Bash(nano *.env*)",
+      "Bash(nano **/.env*)",
+      "Bash(emacs *.env*)",
+      "Bash(emacs **/.env*)",
+      "Bash(code *.env*)",
+      "Bash(code **/.env*)",
+      "Bash(tee *.env*)",
+      "Bash(tee **/.env*)",
+      "Bash(echo * > *.env*)",
+      "Bash(echo * > **/.env*)",
+      "Bash(echo * >> *.env*)",
+      "Bash(echo * >> **/.env*)",
+      "Bash(printf * > *.env*)",
+      "Bash(printf * > **/.env*)",
+      "Bash(source *.env*)",
+      "Bash(source **/.env*)",
+      "Bash(. *.env*)",
+      "Bash(. **/.env*)",
+      "Edit(**/.env)",
+      "Edit(**/.env.*)"
+    ],
+    "defaultMode": "auto"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/deny-env-read.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/db-guard.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*(postgres|mysql|supabase|neon|planetscale|turso|mongo|redis|sqlite|database|bigquery|snowflake|sql|query).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/db-guard.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/post-compact.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/statusline-command.sh\""
+  },
+  "enabledPlugins": {
+    "context7@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "slack@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true,
+    "vercel@claude-plugins-official": true,
+    "linear@claude-plugins-official": true,
+    "firecrawl@claude-plugins-official": true,
+    "caveman@caveman": true,
+    "safety-net@cc-marketplace": false,
+    "figma@claude-plugins-official": true,
+    "expo@claude-plugins-official": true,
+    "composio@composio": true,
+    "notion@claude-plugins-official": true,
+    "sentry@claude-plugins-official": true,
+    "betterstack@betterstack": true
+  },
+  "extraKnownMarketplaces": {
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    },
+    "cc-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "kenryu42/cc-marketplace"
+      }
+    },
+    "composio": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/ComposioHQ/composio-plugin-cc.git"
+      }
+    },
+    "betterstack": {
+      "source": {
+        "source": "github",
+        "repo": "BetterStackHQ/claude-plugin"
+      }
+    }
+  },
+  "effortLevel": "xhigh",
+  "modelSettings": {
+    "claude-opus-5": {
+      "effortLevel": "xhigh"
+    },
+    "claude-fable-5": {
+      "effortLevel": "xhigh"
+    },
+    "claude-fable-5-1": {
+      "effortLevel": "high"
+    },
+    "claude-opus-5-5": {
+      "effortLevel": "high"
+    }
+  },
+  "autoCompactWindow": 150000,
+  "tui": "default",
+  "skipDangerousModePermissionPrompt": true,
+  "autoCompactEnabled": false,
+  "remoteControlAtStartup": true,
+  "agentPushNotifEnabled": true,
+  "skipAutoPermissionPrompt": true
+}

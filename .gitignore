@@ -1,0 +1,39 @@
+# Include only what matters — ignore everything else
+*
+
+# Custom config
+!.gitignore
+!README.md
+!CLAUDE.md
+!settings.json
+!statusline-command.sh
+
+# Custom agents
+!agents/
+!agents/*.md
+
+# Custom skills
+!skills/
+!skills/*/
+!skills/*/SKILL.md
+!skills/*/scripts/
+!skills/*/scripts/*
+!skills/*/references/
+!skills/*/references/*
+
+# Custom hooks (rest of hooks/ is plugin-managed)
+!hooks/
+!hooks/deny-env-read.sh
+
+# Workflow scripts, nested skill references
+!bin/
+!bin/*.ts
+!skills/*/references/**
+!skills/*/agents/
+!skills/*/agents/*
+
+# Own hooks
+!hooks/db-guard.js
+!hooks/post-compact.js
+!hooks/lib/
+!hooks/lib/*.js
