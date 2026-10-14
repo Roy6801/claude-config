@@ -29,8 +29,6 @@ if git -C "$cwd" rev-parse --git-dir --no-optional-locks > /dev/null 2>&1; then
   branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null || git -C "$cwd" rev-parse --short HEAD 2>/dev/null)
   if [ -n "$branch" ]; then
     git_branch=" $branch"
-    # Check for active PR on this branch
-    pr_num=$(gh pr view --json number -q '.number' 2>/dev/null)
   fi
 fi
 
@@ -123,9 +121,8 @@ if [ "$sk_age" -gt "$sk_ttl" ]; then
   fi
 fi
 
-# Pair: current slice/total · commits done/planned · net lines/budget, from the pair.json of
-# the cwd's initiative (active.json: exact cwd or longest parent; written by skills/pair).
-# Stored values only (no bun, no git); hidden without pair.json, "pair off" when mode is off.
+# Pair: the roadmap PR in progress (or next) of the cwd's initiative, from its pair.json
+# (active.json: exact cwd or longest parent). Stored values only (no bun, no git).
 pair_info=""
 pair_active="$config_dir/state/work/active.json"
 if [ -f "$pair_active" ] && [ ! -L "$pair_active" ]; then
@@ -137,31 +134,43 @@ if [ -f "$pair_active" ] && [ ! -L "$pair_active" ]; then
     | select(test("^[a-z0-9]+(-[a-z0-9]+)*$"))' "$pair_active" 2>/dev/null)
   pair_file="$config_dir/state/work/$pair_slug/pair.json"
   if [ -n "$pair_slug" ] && [ -f "$pair_file" ] && [ ! -L "$pair_file" ]; then
-    IFS='|' read -r p_mode p_n p_total p_done p_planned p_net p_budget p_status < <(jq -r '
+    IFS='|' read -r p_n p_total p_shipped p_done p_planned p_net p_budget p_state < <(jq -r '
       (.slices // []) as $s
-      | ([$s[] | select(.status == "active" or .status == "checkpoint")][0]
-         // [$s[] | select(.status == "todo")][0] // $s[-1]) as $c
-      | [(.mode // "on"), ($c.n // 0), ($s | length),
+      | def shipped: .status == "shipped" or (.pr | type) == "number";
+      ([$s[] | select(.status == "active" or .status == "checkpoint")][0]
+         // [$s[] | select(shipped | not)][0]) as $c
+      | [($c.n // 0), ($s | length), ([$s[] | select(shipped)] | length),
          ([$c.commits[]? | select(.extra != true and .status == "done")] | length),
          ([$c.commits[]? | select(.extra != true)] | length),
-         ($c.net_lines // ""), ($c.budget.net_lines // ""), ($c.status // "")]
+         ($c.net_lines // ""), ($c.budget.net_lines // ""),
+         (if $c == null then "all"
+          elif $c.status == "checkpoint" then "checkpoint"
+          elif $c.status == "active" then "building"
+          elif $c.plan_approved_at then "plan approved"
+          elif ([$c.commits[]? | select(.status == "done")] | length) > 0 then "built"
+          else "next" end)]
       | map(tostring) | join("|")' "$pair_file" 2>/dev/null)
-    if [ "$p_mode" = "off" ]; then
-      pair_info="  \033[90mpair off\033[0m"
-    elif [ "${p_total:-0}" -gt 0 ] 2>/dev/null; then
-      if [ "$p_status" = "done" ]; then
-        pair_info="  \033[90mpair ${p_n}/${p_total} · done\033[0m"
+    if [ "${p_total:-0}" -gt 0 ] 2>/dev/null; then
+      if [ "$p_state" = "all" ]; then
+        pair_info="  \033[90mpair: all ${p_total} PRs shipped\033[0m"
       else
-        p_lines=""
-        if [[ "$p_net" =~ ^-?[0-9]+$ ]]; then
-          [ "$p_net" -ge 0 ] && p_net="+$p_net"
-          p_lines=" · $p_net"
-          [[ "$p_budget" =~ ^[0-9]+$ ]] && p_lines+="/$p_budget"
-          [[ "$p_budget" =~ ^[0-9]+$ ]] && [ "${p_net#+}" -gt "$p_budget" ] && p_lines=" · \033[31m${p_lines:3}\033[90m"
-        fi
-        p_cp=""
-        [ "$p_status" = "checkpoint" ] && p_cp=" · checkpoint"
-        pair_info="  \033[90mpair ${p_n}/${p_total} · ${p_done}/${p_planned}${p_lines}${p_cp}\033[0m"
+        p_detail=""
+        case "$p_state" in
+          building|checkpoint|built)
+            p_detail=" · ${p_done}/${p_planned} commits"
+            if [[ "$p_net" =~ ^-?[0-9]+$ ]] && [ "$p_state" != "built" ]; then
+              [ "$p_net" -ge 0 ] && p_net="+$p_net"
+              p_lines=" · $p_net"
+              [[ "$p_budget" =~ ^[0-9]+$ ]] && p_lines+="/$p_budget"
+              [[ "$p_budget" =~ ^[0-9]+$ ]] && [ "${p_net#+}" -gt "$p_budget" ] && p_lines=" · \033[31m${p_lines:3}\033[90m"
+              p_detail+="$p_lines"
+            fi
+            [ "$p_state" = "checkpoint" ] && p_detail+=" · checkpoint"
+            ;;
+          "plan approved") p_detail=" · plan approved" ;;
+          next) p_detail=" · next" ;;
+        esac
+        pair_info="  \033[90mpair: PR ${p_n} of ${p_total}${p_detail} · ${p_shipped} shipped\033[0m"
       fi
     fi
   fi
@@ -169,10 +178,6 @@ fi
 
 stats="${ctx_info}${cost_info}${tok_info}${sk_info}${pair_info}"
 
-if [ -n "$pr_num" ]; then
-  printf "\033[34m%s\033[0m\033[90m%s \033[32mPR #%s\033[0m  \033[33m%s\033[0m%b" \
-    "$short_cwd" "$git_branch" "$pr_num" "$model" "$stats"
-else
-  printf "\033[34m%s\033[0m\033[90m%s\033[0m  \033[33m%s\033[0m%b" \
-    "$short_cwd" "$git_branch" "$model" "$stats"
-fi
+# The open PR is shown by Claude Code's own PR footer (a clickable link), not here.
+printf "\033[34m%s\033[0m\033[90m%s\033[0m  \033[33m%s\033[0m%b" \
+  "$short_cwd" "$git_branch" "$model" "$stats"
