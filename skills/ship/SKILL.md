@@ -1,7 +1,7 @@
 ---
 name: ship
 description: |
-  Create or update the draft pull request for a branch or a planned slice. A script (`pr.ts`) resolves the facts: the base (the open PR's base, the gh stack parent, else the integration target from `br target`), commits since the base, net lines against the 500-line budget, the linked ticket, the pair slice, the repo's PR template, and any open PR. Runs `review self` first, stops on an over-budget diff to propose a split or an explained exception, drafts a Conventional title and a body from the template, the ticket and spec ACs, the commits, real test evidence, and an Evidence section whose screenshots or video the user has reviewed, shows the exact text, and only after approval pushes with `br push` and creates or edits the PR. PRs open as drafts assigned to the user; this skill never force-pushes, and marks ready or merges only when the user asks.
+  Create or update the draft pull request for a branch or a planned slice. A script (`pr.ts`) resolves the facts: the base (the open PR's base, the gh stack parent, else the integration target from `br target`), commits since the base, net lines against the 500-line budget, the linked ticket, the pair slice, the repo's PR template, and any open PR. Runs `review self` first, stops on an over-budget diff to propose a split or an explained exception, drafts a Conventional title and a body from the template, the ticket and spec ACs, the commits, and an Evidence section whose screenshots or video the user has reviewed (never typecheck, lint or test output, which CI reports), shows the exact text, and only after approval pushes with `br push` and creates or edits the PR. PRs open as drafts assigned to the user; this skill never force-pushes, and marks ready or merges only when the user asks.
 
   Use when: a slice passed its checkpoint and needs its PR, creating a PR, updating an open PR's title or description, drafting a PR description, or asked to "ship this", "write the PR", "prep the PR", "create a PR", "update the PR", or `/ship [branch]`.
 user-invocable: true
@@ -43,13 +43,13 @@ Run the `review` skill in `self` scope on this branch before drafting anything. 
 - **ACs**: `bun $CLAUDE_CONFIG_DIR/skills/spec/scripts/spec.ts acs <slug> --json` when an initiative is active (`bun $CLAUDE_CONFIG_DIR/bin/work.ts current --json`). Restrict them to the slice's `acs` when `slice` is set.
 - **Commits**: from `pr facts`. Read `git show --stat <sha>` and commit bodies for the Added / Modified / Deleted rollup and the rationale. Read the full diff only when it is small; otherwise dispatch one read-only agent to summarize it by behavior.
 - **Template**: `git show <headRef>:<template.path>`. Several choices: pick by change type and say which. None: the default sections in `references/body.md`.
-- **Evidence**: the newest `qa-*.md` in the initiative directory (verdict per AC, GIFs), test and typecheck output from this session, browser screenshots and recordings from this session's checks, screenshots or videos the user supplies. Copy every image or video for the Evidence section into one scratchpad folder, named in the order they appear (`1-before.png`, `2-after.png`); the body file goes in the same folder. No visual evidence for a UI change: capture it now through the browser tool, or ask the user whether to skip. Never invent a command, a count or a result.
+- **Evidence**: the newest `qa-*.md` in the initiative directory (verdict per AC, GIFs), browser screenshots and recordings from this session's checks, screenshots or videos the user supplies. Copy every image or video for the Evidence section into one scratchpad folder, named in the order they appear (`1-before.png`, `2-after.png`); the body file goes in the same folder. No visual evidence for a UI change: capture it now through the browser tool, or ask the user whether to skip. Never invent a command, a count or a result. Typecheck, lint and test runs are never evidence: CI reports them on the PR.
 - **Voice and title style**: `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts conventions --json` for the repo's PR title style; the author's last 3 merged PR bodies for density and how they link tickets and embed media (style only, never content).
 - **Changeset tooling**: see `references/body.md`.
 
 ### 5. Draft
 
-Title: Conventional Commit (`<type>(<scope>): <plain-language summary>`, under 70 characters), unless the repo's merged PRs use another style; follow the repo. Body: `references/body.md`, which covers the required sections by change type, the AC and evidence table, rollout and rollback, exceptions, update mode, and voice.
+Title: Conventional Commit (`<type>(<scope>): <plain-language summary>`, under 70 characters), unless the repo's merged PRs use another style; follow the repo. Body: `references/body.md`, which covers the required sections by change type, the AC and evidence table, rollout and rollback, exceptions, update mode, and voice. A body drafted in an earlier session is input, not a finished draft: rewrite every section of it against these rules.
 
 Before showing it, self-grill per `$CLAUDE_CONFIG_DIR/skills/brainstorm/references/self-grill.md`: answer the three questions a reviewer is most likely to ask, and fix the body where it does not.
 
@@ -77,11 +77,11 @@ Optional labels: suggest up to 3 from `gh label list --json name,description` wi
 
 ## Rules
 
-- **Evidence is mandatory and reviewed first.** Every PR body carries an Evidence section (screenshots or video for anything UI-visible; command output, logs or test results otherwise), unless the user explicitly says to skip it for this PR. Every attachment is shown to the user and approved before it is uploaded. Evidence goes in the PR body, never in a PR comment.
+- **Evidence is mandatory and reviewed first.** Every PR body carries an Evidence section (screenshots or video for anything UI-visible; otherwise output that shows the behavior itself, such as a script run, a log excerpt or an API response; never typecheck, lint or test results), unless the user explicitly says to skip it for this PR. Every attachment is shown to the user and approved before it is uploaded. Evidence goes in the PR body, never in a PR comment.
 - PRs open as drafts assigned to the user. They stay drafts and unmerged until the user asks; when the user asks to mark one ready for review or merge it, do it directly (`gh pr ready <n>`, `gh pr merge`), without a second confirmation. Never force-push or close a PR.
 - Every side effect needs a yes for that action: push, create, edit, label, upload. A yes covers only the actions shown with it.
 - At most 500 net lines per PR unless the user approves an exception, and the body then says why.
 - Template headings are kept; a heading that does not apply gets `N/A` and a reason.
-- Evidence is real or absent. No invented test output, no unbacked checkbox.
+- Evidence is real or absent. No invented output, no unbacked checkbox.
 - Nothing hardcoded: base, labels, title style and ticket prefix come from the scripts or the repo at run time.
 - No AI attribution and no session links or ids in the title, body, commits or media.

@@ -33,7 +33,7 @@ Whole branch against its base, before the review request. Produce one checklist;
 7. **Maintainability.** Reviewer findings across the whole branch (thermo across slices): no open `blocker`, and every `major` fixed or justified.
 8. **Cold read.** `explain` on the branch: its Code vs Stated Intent section has no `Missing` or `Contradicts`, and every `Extra` is either intended (say so in the PR body) or removed.
 9. **Bots and threads.** Any unresolved review threads (from `gh-activity pr`), including bot findings, are handled through the `feedback` scope: fix, rebut, or defer.
-10. **PR body.** If a PR exists, compare its body with the repo's PR template and with what `ship` requires (what, why, how to test, risk, verification, ticket link, AC and evidence table, exceptions). List missing sections and offer to update the body through `ship`. No PR yet (for example when `ship` runs this gate before drafting): n/a, and hand this checklist to `ship` as input for the body.
+10. **PR body.** If a PR exists, compare its body with the repo's PR template and with what `ship` requires (what, why, how to test, risk, ticket link, AC and evidence table, exceptions). List missing sections and offer to update the body through `ship`. No PR yet (for example when `ship` runs this gate before drafting): n/a, and hand this checklist to `ship` as input for the body.
 11. **Reviewer's questions.** Self-grill with `$CLAUDE_CONFIG_DIR/skills/brainstorm/references/self-grill.md`, and add the three questions a reviewer is most likely to ask, each with its answer or "unanswered".
 
 Output template:
