@@ -1335,7 +1335,7 @@ async function cmdCommit(args: Args) {
     console.log(`committed ${short(sha)} ${title}`);
     console.log(`PR ${s.n}: ${done}/${planned(s).length} planned commits · net lines ${signed(net.net)}/${s.budget.net_lines}`);
     if (next) console.log(`next: commit ${next.n} ${next.title}`);
-    else if (isShipped(s)) console.log(`PR ${s.n} is shipped${s.pr ? ` as #${s.pr}` : ""}; push the fix with br push`);
+    else if (isShipped(s)) console.log(`PR ${s.n} is shipped${s.pr ? ` as #${s.pr}` : ""}; push the fix through /ship (update mode) after the user's OK`);
     else console.log(`all planned commits done: PR ${s.n} is at its checkpoint`);
   });
 }

@@ -70,11 +70,11 @@ Run the plan gate in `references/plan-mode.md` for this PR only. The plan is ela
 
 ## Build
 
-Run `pair slice start <n>`; ask whether to switch here or open a worktree when that is not already clear, and run the printed `br new` command. Then build the whole PR in one run, commit after commit, with no pause for the user between commits: builder, review of its diff, `pair check`, the commit's check, staging by path, `pair commit`, `br push`. The loop and the message format are in `references/commits.md`. Stop only for a `pair check` exit 2, a planned commit that proves wrong, or about 30 minutes blocked; each of those goes to the user as options with a recommendation, and an answer that changes the plan opens the re-plan gate.
+Run `pair slice start <n>`; ask whether to switch here or open a worktree when that is not already clear, and run the printed `br new` command. Then build the whole PR in one run, commit after commit, with no pause for the user between commits: builder, review of its diff, `pair check`, the commit's check, staging by path, `pair commit`. Commits stay local: pair never pushes; `/ship` pushes after the user's OK. The loop and the message format are in `references/commits.md`. Stop only for a `pair check` exit 2, a planned commit that proves wrong, or about 30 minutes blocked; each of those goes to the user as options with a recommendation, and an answer that changes the plan opens the re-plan gate.
 
 ## Checkpoint, walkthrough, ship
 
-When the last planned commit lands, run `references/checkpoint.md`: the checkpoint, then one question asking whether to walk through the PR (with the steps to check it themselves), the walkthrough of every commit in one message, the user's one OK, `/ship`, and `pair slice ship <n> --pr <number>`.
+When the last planned commit lands, run `references/checkpoint.md`: the checkpoint, then one question asking whether to walk through the PR (with the steps to check it themselves), the walkthrough of every commit in one message, the user's one OK (the go-ahead for `/ship` to push and open the draft without asking again), `/ship`, and `pair slice ship <n> --pr <number>`.
 
 ## Handoff questions
 
@@ -96,7 +96,7 @@ Log only decisions the user made or must know about (a scope change, a conventio
 ## Rules
 
 - Write everything the user reads in plain sentences, next step first, without internal terms; say "goes live together with PR 3" in place of "merge point".
-- Never mark a PR ready for review, never merge, never force-push, never pass `--no-verify` to a commit.
+- Never push: commits stay local until `/ship` pushes them after the user's OK, and fixes after ship go up the same way (`/ship` in update mode). Never mark a PR ready for review, never merge, never force-push, never pass `--no-verify` to a commit.
 - Never touch a database. If a PR needs data, write a data request for the user to run.
 - Never add AI attribution, session links or trailers to commits, PRs, tickets or issues.
 - Keep pair state out of repositories and `.git`; it lives only in the initiative directory.

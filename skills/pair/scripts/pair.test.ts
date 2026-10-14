@@ -963,7 +963,7 @@ describe("scratch repo", () => {
     g("add", "src/greet.ts");
     const fix = pair("commit", "--title", "fix(greet): add the comma reviewers asked for", "--why", "review feedback", "--notes", notes({ "src/greet.ts": "comma after hi" }));
     expect(fix.code).toBe(0);
-    expect(fix.out).toContain("PR 1 is shipped as #101; push the fix with br push");
+    expect(fix.out).toContain("PR 1 is shipped as #101; push the fix through /ship (update mode) after the user's OK");
     expect(pairJson().slices[0]!.status).toBe("shipped");
     expect(JSON.parse(pairAs("chat-n", "next", "--json").out)).toMatchObject({ action: "plan", slice: { n: 2 } });
   });

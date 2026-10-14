@@ -9,7 +9,7 @@ Each planned commit goes through the same loop, one after another until the PR i
 3. Run `pair check`. Exit 2 means a file is outside the planned commit or the budget is exceeded: stop and ask the user whether to split, move the change to another commit or PR, or raise the limit with a reason.
 4. Run the commit's check command and read its output.
 5. Stage the planned files by path, write the notes file, and run `pair commit`.
-6. Push with `br push` (never force) and post one line: the commit title, the check result, anything noticed. Then start the next commit.
+6. Post one line: the commit title, the check result, anything noticed. Do not push; the commit stays local until `/ship` pushes it after the user's OK. Then start the next commit.
 
 ## Dispatching the builder
 

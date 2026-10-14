@@ -65,7 +65,7 @@ Write the body to a scratchpad file. Show the exact title, the full body, the ba
 2. `pr upsert --title "<title>" --body-file <file> --attach ./<file>#<alt> ... --dry-run`, with one `--attach` per approved file, then show its command.
 3. The same without `--dry-run`.
 
-Run only the actions the user approves. Then run `pr facts` again and check: the PR exists, is a draft (create mode), is assigned to the user, targets the confirmed base, and `gh pr view <n> --json body` matches the approved body with every `](./<file>)` rewritten to an uploaded asset. Report the URL. When the repo has a bot that rewrites PR bodies, recheck the Evidence section after its run and restore it if it was dropped.
+Invoking ship is the user's OK: when the user asked to create or update the PR, or said yes to shipping after a `pair` walkthrough, run these actions right after showing them, without asking again. Attachments are the exception: they are reviewed in step 5b before anything is uploaded. Labels and anything beyond these actions still need their own yes. Then run `pr facts` again and check: the PR exists, is a draft (create mode), is assigned to the user, targets the confirmed base, and `gh pr view <n> --json body` matches the approved body with every `](./<file>)` rewritten to an uploaded asset. Report the URL. When the repo has a bot that rewrites PR bodies, recheck the Evidence section after its run and restore it if it was dropped.
 
 ### 7. Stacked slices
 
@@ -80,7 +80,7 @@ Optional labels: suggest up to 3 from `gh label list --json name,description` wi
 - **The body is for humans.** It says in plain words what the PR does and why. It never carries the output of checks (typecheck, lint, tests).
 - **Evidence is mandatory and reviewed first.** Every PR body carries an Evidence section (screenshots or video for anything UI-visible; otherwise output that shows the behavior itself, such as a script run, a log excerpt or an API response), unless the user explicitly says to skip it for this PR. Every attachment is shown to the user and approved before it is uploaded. Evidence goes in the PR body, never in a PR comment.
 - PRs open as drafts assigned to the user. They stay drafts and unmerged until the user asks; when the user asks to mark one ready for review or merge it, do it directly (`gh pr ready <n>`, `gh pr merge`), without a second confirmation. Never force-push or close a PR.
-- Every side effect needs a yes for that action: push, create, edit, label, upload. A yes covers only the actions shown with it.
+- The user's ask to create or update the PR (or their yes to ship after a walkthrough) is the yes for its push, create or edit and the approved uploads. Every other side effect (labels, retargeting, anything not in the action list) needs its own yes.
 - At most 500 net lines per PR unless the user approves an exception, and the body then says why.
 - Template headings are kept; a heading that does not apply gets `N/A` and a reason.
 - Evidence is real or absent. No invented output, no unbacked checkbox.
