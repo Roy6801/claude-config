@@ -91,7 +91,8 @@ The main thread is the orchestrator and the dialogue with me: it holds decisions
 - The default branch and the integration target always come from the remote (`br target`), never from a local `origin/HEAD`
 - Branches use a conventional prefix (`feature/`, `fix/`, `test/`, `docs/`, `poc/`, …); suggest a name with `br name` and let me confirm it
 - Push with `--no-verify` (the TypeScript pre-push hook runs out of memory) and never force-push without my explicit consent
-- **Every PR body has an Evidence section** (screenshots or video for UI changes; otherwise output that shows the behavior itself, never typecheck, lint or test results, which CI reports), attached with `gh pr edit|create --attach` in the body, never a comment. I review every attachment before it is uploaded. Skip it only when I say so for that PR (`/ship` owns the flow)
+- **A PR body is a human-readable account of what the PR does**, never the output of checks (typecheck, lint, tests)
+- **Every PR body has an Evidence section** (screenshots or video for UI changes; otherwise output that shows the behavior itself), attached with `gh pr edit|create --attach` in the body, never a comment. I review every attachment before it is uploaded. Skip it only when I say so for that PR (`/ship` owns the flow)
 - PRs open as drafts assigned to me (`/ship`). They stay drafts and unmerged unless I explicitly ask; when I ask to make one ready for review or merge it, do it right away without re-confirming
 - Commits: Conventional title in plain language; body with Why, Added / Modified / Deleted, Alternatives, Deviation, Noticed, Checked with, ACs (`pair commit` writes it)
 - Default to `gh` for GitHub operations; `gh api <endpoint>` (with `--jq`) for anything not covered

@@ -1,5 +1,7 @@
 # PR title and body
 
+The body tells a human reader what the PR does and why, in plain words. It never carries the output of checks (typecheck, lint, tests, their counts or commands).
+
 The `review` skill's `self` scope checks a PR body for: what, why, how to test, evidence, risk, ticket link, the AC and evidence table, and exceptions. Every body this skill drafts carries all of them, inside the repo template's headings when it has them, added as sections when it does not.
 
 ## Default sections (no repo template)
@@ -28,7 +30,7 @@ The `review` skill's `self` scope checks a PR body for: what, why, how to test, 
   | UI-visible, any type | A demo in the Evidence section: before and after for a fix, a walkthrough GIF or video for a feature |
 
   Type precedence when signals disagree: branch prefix, then the diff, then the ticket label; tell the user about the disagreement. Write "the base branch", never its name, in reproduction steps.
-- **Evidence.** One block per fix or AC, in the order of What changed: a bold label with the commit, one sentence on what the image shows, then the image (`![<what it shows>](./<file>)`). Before and after pairs for fixes. Say where it was taken (local build, preview, staging data) and anything staged for it (markup injected in the browser, seeded data); a staged screen is never presented as real data. Not UI-visible: output that shows the behavior itself (a script run, a log excerpt, an API response), quoted verbatim. Never typecheck, lint or test results, counts or commands: CI reports them on the PR. Only files the user approved in the evidence review.
+- **Evidence.** One block per fix or AC, in the order of What changed: a bold label with the commit, one sentence on what the image shows, then the image (`![<what it shows>](./<file>)`). Before and after pairs for fixes. Say where it was taken (local build, preview, staging data) and anything staged for it (markup injected in the browser, seeded data); a staged screen is never presented as real data. Not UI-visible: output that shows the behavior itself (a script run, a log excerpt, an API response), quoted verbatim. Only files the user approved in the evidence review.
 - **Risk and rollout.** Only what is real: the feature flag and its default when incomplete work merges, migrations and their order, env vars, deploy order, how to roll back (revert, flag off). A low-risk change says so in one line.
 - **Exceptions.** Every approved convention exception from the plan (`exceptions` in pair.json) or the review, with what and why, and the size exception from `references/size.md` when there is one.
 - **Additional notes.** The part of the diff a reviewer should read hardest, when there is one.
