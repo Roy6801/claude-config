@@ -28,7 +28,7 @@ const EXIT_STOP = 2;
 const SLICE_STATUSES = ["todo", "active", "checkpoint", "done", "shipped"] as const;
 const VALUE_FLAGS = new Set(["--slug", "--why", "--notes", "--alt", "--deviation", "--noticed", "--checked", "--slice", "--commit", "--title", "--pr", "--plan"]);
 const CARRY_SLICE = ["test_script", "patterns", "exceptions", "green_check", "budget", "target_date", "prefactor", "why", "merge_point", "plan_file", "plan_approved_at"];
-const CARRY_PROGRESS = ["status", "started_at", "done_at", "net_lines", "net_at", "pr", "shipped_at", "sessions"];
+const CARRY_PROGRESS = ["status", "started_at", "done_at", "net_lines", "net_at", "pr", "shipped_at", "live_at", "sessions"];
 const CARRY_COMMIT = ["files", "check", "est_lines", "acs"];
 
 type Args = { pos: string[]; flags: Map<string, string | true> };
@@ -76,11 +76,12 @@ export type Slice = {
   net_at?: string;
   pr?: number;
   shipped_at?: string;
+  live_at?: string;
   sessions?: string[];
 };
 export type Pair = { slug: string; repo: string; deadline?: string; cap: number; base: string; slices: Slice[] };
 export type Change = { kind: "A" | "M" | "D" | "R" | "C" | "T"; path: string; from?: string };
-export type Action = "plan" | "build" | "checkpoint" | "ship" | "fixes" | "refuse" | "no-plan" | "all-shipped";
+export type Action = "plan" | "build" | "checkpoint" | "ship" | "fixes" | "refuse" | "no-plan" | "close-milestone" | "all-shipped";
 export type Stage = "todo" | "planned" | "in-progress" | "checkpoint" | "shipped";
 type Net = { ins: number; del: number; net: number };
 type Obj = Record<string, unknown>;
@@ -254,6 +255,7 @@ export function stageOf(s: Slice): Stage {
 }
 
 export function stateOf(s: Slice): string {
+  if (s.live_at) return "live";
   if (isShipped(s)) return s.pr ? `draft #${s.pr}` : "shipped";
   if (isBuilt(s)) return "built, not shipped";
   if (isStarted(s)) return `in progress, ${commitCount(s)}`;
@@ -269,6 +271,7 @@ export function starterFor(p: Pair, s: Slice): string {
 }
 
 export function roadmapStatus(p: Pair, s: Slice, current: string | null): string {
+  if (s.live_at) return "live";
   if (isShipped(s)) return current === "live" ? "live" : s.pr ? `draft #${s.pr}` : "shipped";
   if (isBuilt(s) || isStarted(s)) return `in progress, ${commitCount(s)}`;
   if (isPlanned(s)) return "plan approved";
@@ -277,7 +280,8 @@ export function roadmapStatus(p: Pair, s: Slice, current: string | null): string
 
 const HEADING_RE = /^(\*\*PR (\d+): .+?\*\*) \(([^)]*)\)[ \t]*$/;
 const NEXT_UP_RE = /^\*\*Next up:.*$/;
-// Written by the done skill once every PR is live; kept while nothing is left to ship.
+const DONE_LINE = "**Next up: nothing; every PR is live. This roadmap is done.**";
+// Older roadmaps got this line from the done skill by hand; kept while nothing is left to ship.
 const DONE_RE = /^\*\*Next up: nothing; every PR is live\. This roadmap is done\.\*\*$/;
 
 // Rewrites only the status parts of roadmap.md: each "**PR <n>: <name>** (<status>)" heading and the
@@ -306,9 +310,11 @@ export function syncRoadmap(md: string, p: Pair): { md: string; changed: string[
   });
   for (const s of p.slices) if (!seen.has(s.n)) problems.push(`ladder PR ${s.n} "${s.title}" has no "**PR ${s.n}: …** (…)" line in the roadmap`);
   const next = p.slices.find((x) => !isShipped(x)) ?? null;
-  const nextUp = next
-    ? `**Next up: PR ${next.n}, ${names.get(next.n) ?? next.title}.** Start it in a fresh chat with \`${starterFor(p, next)}\`.`
-    : "**Next up: nothing; every PR in this roadmap is shipped.**";
+  const gate = next ? openMilestone(p, next) : null;
+  let nextUp: string;
+  if (next && gate) nextUp = `**Next up: close ${gate.milestone} once ${prList(gate.slices)} ${gate.slices.length === 1 ? "merges" : "merge"}, with \`/done ${p.slug} milestone ${gate.milestone}\`; then PR ${next.n}, ${names.get(next.n) ?? next.title}.**`;
+  else if (next) nextUp = `**Next up: PR ${next.n}, ${names.get(next.n) ?? next.title}.** Start it in a fresh chat with \`${starterFor(p, next)}\`.`;
+  else nextUp = p.slices.every((x) => x.live_at) ? DONE_LINE : "**Next up: nothing; every PR in this roadmap is shipped.**";
   const out = lines.map((line) => {
     if (!NEXT_UP_RE.test(line)) return line;
     nextUpLines++;
@@ -324,6 +330,12 @@ export function syncRoadmap(md: string, p: Pair): { md: string; changed: string[
 export function liveWith(p: Pair, s: Slice): Slice | null {
   if (s.merge_point) return s;
   return p.slices.find((x) => x.n > s.n && x.merge_point) ?? null;
+}
+
+export function openMilestone(p: Pair, s: Slice): { milestone: string; slices: Slice[] } | null {
+  if (!s.milestone || stageOf(s) !== "todo" || p.slices.some((x) => x.n < s.n && x.milestone === s.milestone)) return null;
+  const milestone = p.slices.find((x) => x.n < s.n && x.milestone && !x.live_at)?.milestone;
+  return milestone ? { milestone, slices: p.slices.filter((x) => x.milestone === milestone && !x.live_at) } : null;
 }
 
 export function builtUnshipped(p: Pair): Slice[] {
@@ -397,7 +409,7 @@ export function validatePlan(raw: unknown, ctx: { slug: string; repo: string | n
     const budget = (s.budget as { net_lines?: unknown } | undefined)?.net_lines ?? MAX_BUDGET;
     if (!Number.isInteger(budget) || (budget as number) < 1) bad("budget.net_lines must be a positive integer");
     else if ((budget as number) > MAX_BUDGET) bad(`budget ${budget} net lines is over the ${MAX_BUDGET} limit; split the slice`);
-    for (const k of ["milestone", "ticket", "green_check", "why", "plan_file", "plan_approved_at", "shipped_at"]) if (s[k] !== undefined && !isStr(s[k])) bad(`${k} must be a non-empty string`);
+    for (const k of ["milestone", "ticket", "green_check", "why", "plan_file", "plan_approved_at", "shipped_at", "live_at"]) if (s[k] !== undefined && !isStr(s[k])) bad(`${k} must be a non-empty string`);
     if (s.merge_point !== undefined && typeof s.merge_point !== "boolean") bad("merge_point must be true or false");
     if (s.pr !== undefined && !(Number.isInteger(s.pr) && (s.pr as number) > 0)) bad("pr must be the PR number");
     if (s.sessions !== undefined && !strList(s.sessions)) bad("sessions must be a list of chat ids");
@@ -476,7 +488,7 @@ export function validatePlan(raw: unknown, ctx: { slug: string; repo: string | n
       commits,
     };
     if (strList(s.test_script) && s.test_script.length) out.test_script = s.test_script;
-    for (const k of ["target_date", "milestone", "ticket", "green_check", "why", "plan_file", "plan_approved_at", "started_at", "done_at", "net_at", "shipped_at"] as const)
+    for (const k of ["target_date", "milestone", "ticket", "green_check", "why", "plan_file", "plan_approved_at", "started_at", "done_at", "net_at", "shipped_at", "live_at"] as const)
       if (isStr(s[k])) out[k] = s[k] as string;
     if (s.prefactor === true) out.prefactor = true;
     if (typeof s.net_lines === "number") out.net_lines = s.net_lines;
@@ -488,6 +500,13 @@ export function validatePlan(raw: unknown, ctx: { slug: string; repo: string | n
     }
     return out;
   });
+
+  const order: string[] = [];
+  for (const s of slices) {
+    if (!s.milestone || order.at(-1) === s.milestone) continue;
+    if (order.includes(s.milestone)) problems.push(`slice ${s.n} "${s.title}": milestone ${s.milestone} comes back after ${order.at(-1)}; keep each milestone's PRs together`);
+    else order.push(s.milestone);
+  }
 
   const last = slices[slices.length - 1];
   if (last && !last.merge_point) notes.push(`slice ${last.n} "${last.title}" is not a merge point and nothing above it takes it live`);
@@ -622,13 +641,17 @@ function phase(s: Slice, sid: string | null): Action {
 export function nextFor(p: Pair, sid: string | null, opts: { want?: number; implement?: boolean } = {}) {
   const held = sid ? p.slices.filter((s) => s.sessions?.includes(sid)) : [];
   const open = (except: Slice | null) => p.slices.find((s) => s !== except && !isShipped(s)) ?? null;
-  const result = (action: Action, slice: Slice | null) => ({
-    action,
-    slice,
-    held,
-    earlier: slice ? p.slices.filter((s) => s.n < slice.n && !isShipped(s)) : [],
-    next: open(slice),
-  });
+  const result = (action: Action, slice: Slice | null) => {
+    const gate = action === "plan" && slice ? openMilestone(p, slice) : null;
+    return {
+      action: gate ? ("close-milestone" as const) : action,
+      slice,
+      gate,
+      held,
+      earlier: slice ? p.slices.filter((s) => s.n < slice.n && !isShipped(s)) : [],
+      next: open(slice),
+    };
+  };
   if (opts.want !== undefined) {
     const target = p.slices.find((s) => s.n === opts.want);
     if (!target) throw new UserError(`PR ${opts.want} not found (PRs 1-${p.slices.length})`);
@@ -1080,6 +1103,7 @@ async function cmdPlanShow(args: Args) {
 function nextLine(p: Pair, r: ReturnType<typeof nextFor>): string {
   const s = r.slice;
   const name = s ? `PR ${s.n}, "${s.title}"` : "";
+  const g = r.gate;
   const fresh = r.next ? `Next is PR ${r.next.n}, "${r.next.title}": start it in a fresh chat with ${starterFor(p, r.next)} (run /handoff for the starter).` : "Every other PR is shipped.";
   switch (r.action) {
     case "plan":
@@ -1096,6 +1120,8 @@ function nextLine(p: Pair, r: ReturnType<typeof nextFor>): string {
       return `This chat is on ${prList(r.held)}. One PR per chat: start ${name} in a fresh chat with ${s ? starterFor(p, s) : "/pair"} (run /handoff for the starter).`;
     case "no-plan":
       return `No PR has an approved plan or a half-built branch. Run /pair plan ${p.slug} to plan the next one.`;
+    case "close-milestone":
+      return g ? `${name}, starts a new milestone, but ${g.milestone} is not live yet (${prList(g.slices)}). Ask the user: close ${g.milestone} first with /done ${p.slug} milestone ${g.milestone} once its PRs merge, or plan PR ${s?.n} ahead of it and log why.` : name;
     case "all-shipped":
       return "Every PR in the ladder is shipped.";
   }
@@ -1122,6 +1148,7 @@ async function cmdNext(args: Args) {
     held: r.held.map((x) => x.n),
     earlier: r.earlier.map((x) => x.n),
     next: r.next && { n: r.next.n, title: r.next.title },
+    milestone: r.gate && { name: r.gate.milestone, open: r.gate.slices.map((x) => x.n) },
     message: nextLine(pair, r),
   };
   emit(args.flags.has("--json"), data, () => console.log(data.message));
@@ -1447,8 +1474,24 @@ async function cmdWalk(args: Args) {
 
 async function cmdSlice(args: Args) {
   allowFlags(args, ["--force", "--batch", "--pr"]);
-  const [action, nRaw] = args.pos;
-  if ((action !== "start" && action !== "ship") || !nRaw || !/^\d+$/.test(nRaw)) throw new UserError("usage: pair slice start <n> [--force] | pair slice ship <n> --pr <number> [--force]");
+  const [action, ...nums] = args.pos;
+  const nRaw = nums[0];
+  if (action === "live") {
+    if (!nums.length || !nums.every((n) => /^\d+$/.test(n))) throw new UserError("usage: pair slice live <n> [<n>…]");
+    const { pair, file } = await load(args);
+    const targets = nums.map((n) => sliceArg(pair, n, null));
+    const unshipped = targets.filter((x) => !isShipped(x));
+    if (unshipped.length) throw new UserError(`${prList(unshipped)} ${unshipped.length === 1 ? "is" : "are"} not shipped yet; only a merged PR goes live`);
+    const now = new Date().toISOString();
+    for (const x of targets) x.live_at ??= now;
+    save(file, pair);
+    syncRoadmapFile(dirname(file), pair);
+    const milestones = [...new Set(targets.map((x) => x.milestone).filter((m): m is string => !!m))];
+    const live = milestones.filter((m) => pair.slices.filter((x) => x.milestone === m).every((x) => x.live_at));
+    const line = `${prList(targets)} ${targets.length === 1 ? "is" : "are"} live.${live.map((m) => ` Milestone ${m} is live.`).join("")}`;
+    return emit(args.flags.has("--json"), { slices: targets.map((x) => x.n), live, message: line }, () => console.log(line));
+  }
+  if ((action !== "start" && action !== "ship") || !nRaw || !/^\d+$/.test(nRaw)) throw new UserError("usage: pair slice start <n> [--force] | pair slice ship <n> --pr <number> [--force] | pair slice live <n> [<n>…]");
   const { pair, file } = await load(args);
   const s = sliceArg(pair, nRaw, null);
   const force = args.flags.has("--force");
@@ -1474,9 +1517,15 @@ async function cmdSlice(args: Args) {
     save(file, pair);
     const roadmap = syncRoadmapFile(dirname(file), pair);
     const next = after();
-    const starter = next ? starterFor(pair, next) : null;
-    const line = `PR ${s.n} is open as draft #${pr} and marked shipped in the ${roadmap.file ? "roadmap" : "ladder"}. ${next ? `Next is PR ${next.n}, ${next.title} (starter: ${starter}).` : "Every PR in the ladder is shipped."}`;
-    return emit(json, { slice: s.n, status: s.status, pr, changed, next: next && { n: next.n, title: next.title, starter }, message: line }, () => console.log(line));
+    const gate = next ? openMilestone(pair, next) : null;
+    const starter = next ? (gate ? `/done ${pair.slug} milestone ${gate.milestone}` : starterFor(pair, next)) : null;
+    const shipped = `PR ${s.n} is open as draft #${pr} and marked shipped in the ${roadmap.file ? "roadmap" : "ladder"}.`;
+    const line = !next
+      ? `${shipped} Every PR in the ladder is shipped.`
+      : gate
+        ? `${shipped} Next is closing ${gate.milestone} (${prList(gate.slices)}): once its PRs merge, run ${starter}. PR ${next.n}, ${next.title}, comes after that.`
+        : `${shipped} Next is PR ${next.n}, ${next.title} (starter: ${starter}).`;
+    return emit(json, { slice: s.n, status: s.status, pr, changed, next: next && { n: next.n, title: next.title, starter }, milestone: gate && { name: gate.milestone, open: gate.slices.map((x) => x.n) }, message: line }, () => console.log(line));
   }
 
   const cmd = `br new ${s.branch} --here --base ${base}`;
@@ -1567,6 +1616,7 @@ const USAGE = `usage: pair <command> [--slug <slug>] [--json]   (default slug: w
   walk [--slice <n> | --commit <sha>]   commit-by-commit walkthrough, deviations first
   slice start <n> [--force]        this chat takes PR n (one PR per chat); prints the br command
   slice ship <n> --pr <number>     record the draft PR that /ship opened; prints the next PR and its starter
+  slice live <n> [<n>…]            record merged PRs as live (the done skill runs it after it verifies the merge)
   roadmap sync                     rewrite the PR statuses and the Next up line of roadmap.md from the ladder
   roadmaps                         initiatives of this repo with an unshipped PR, their Next up line and starter
   --batch                          on plan save --slice, slice, commit: let this chat work on another PR (only on the user's explicit ask)`;

@@ -34,7 +34,7 @@ Brainstorm writes these for every PR:
 | `branch` | The confirmed branch name (`br name`), unique in the ladder |
 | `acs` | AC ids it delivers: `AC-<n>` from the initiative's spec, or `<TICKET>/AC-<n>` for an AC that lives on a Linear ticket (for example `ENG-42/AC-1`). Plain ids are checked against `spec.md` when it exists; ticket-scoped ids are shape-checked only. Empty only on a prefactor PR |
 | `merge_point` | `true` (the default) when the PR goes live on its own or takes its group live; `false` when it goes live together with the next PR above it that is `true` |
-| `milestone` | The milestone it belongs to |
+| `milestone` | The milestone it belongs to. A milestone's PRs are consecutive; the first PR of a later milestone waits (pair asks) until every earlier milestone's PRs are live |
 | `est_days` | Estimate in working days |
 | `ticket` | Optional Linear ticket key or GitHub issue number (`#412`) |
 | `prefactor`, `why` | `prefactor: true` with a `why` lets a no-behaviour-change PR have no ACs |
@@ -55,7 +55,7 @@ Pair adds these when the PR's plan is approved; `pair slice start` refuses a PR 
 | `green_check` | Optional; without it `pair green` runs the commits' checks, de-duplicated |
 | `target_date` | Optional `YYYY-MM-DD` |
 
-The script owns these; never write them by hand: `status` (`todo`, `active`, `checkpoint`, `shipped`; `done` in older ladders means built and approved, not shipped), `plan_file`, `plan_approved_at`, `started_at`, `net_lines`, `net_at`, `pr`, `shipped_at`, `sessions` (the chats that held the PR), and per commit `status`, `sha`, `done_at`, `extra`.
+The script owns these; never write them by hand: `status` (`todo`, `active`, `checkpoint`, `shipped`; `done` in older ladders means built and approved, not shipped), `plan_file`, `plan_approved_at`, `started_at`, `net_lines`, `net_at`, `pr`, `shipped_at`, `live_at` (set by `pair slice live` once the done skill verifies the merge), `sessions` (the chats that held the PR), and per commit `status`, `sha`, `done_at`, `extra`.
 
 ## Commits inside a PR
 

@@ -15,6 +15,7 @@ import {
   liveWith,
   migrate,
   nextFor,
+  openMilestone,
   parseNameStatus,
   parsePorcelainPaths,
   parseShortstat,
@@ -126,6 +127,17 @@ describe("validatePlan", () => {
     expect(p.slices[0]!.budget.net_lines).toBe(500);
     expect(planGaps(p.slices[0]!)).toEqual(["no test script", "commit 1 has no files, check, est_lines", "commit 2 has no files, check, est_lines"]);
     expect(planGaps(valid().slices[0]!)).toEqual([]);
+  });
+
+  test("a milestone must keep its PRs together", () => {
+    const three = (ms: string[]) => {
+      const p = plan();
+      p.slices.push({ ...structuredClone(p.slices[1]!), n: 3, title: "Third", branch: "feature/demo-third" });
+      p.slices.forEach((s, i) => (s.milestone = ms[i]));
+      return p;
+    };
+    expect(problemsOf(three(["M1", "M2", "M1"]))).toContain('slice 3 "Third": milestone M1 comes back after M2; keep each milestone\'s PRs together');
+    expect(problemsOf(three(["M1", "M1", "M2"]))).toEqual([]);
   });
 
   test("present commit details are still validated", () => {
@@ -292,6 +304,13 @@ describe("carryOver and planDiff", () => {
     return { plan: r.plan!, ...planDiff(old, r.plan!) };
   };
 
+  test("keeps live_at from the stored PR", () => {
+    const old = stored();
+    old.slices[0]!.live_at = "2026-10-12T10:00:00.000Z";
+    const { plan: merged } = resave(old, plan());
+    expect(merged.slices[0]!.live_at).toBe("2026-10-12T10:00:00.000Z");
+  });
+
   test("inserting a PR before a started one keeps its done markers by branch and commit title", () => {
     const old = stored();
     const raw = plan();
@@ -444,6 +463,48 @@ describe("routing and one PR per chat", () => {
     expect(shipFirstWarning(p)).toBe("2 PRs are built but not shipped (PR 2, PR 3); ship PR 2 first, one PR per chat");
     expect(isBuilt(p.slices[2]!)).toBe(true);
   });
+
+  describe("milestone gate", () => {
+    const milestones = (p: Pair, ms: string[]) => p.slices.forEach((s, i) => (s.milestone = ms[i]));
+    const shipTwo = (p: Pair) => {
+      for (const s of p.slices.slice(0, 2)) Object.assign(s, { status: "shipped", pr: 100 + s.n });
+    };
+
+    test("the first PR of a later milestone waits while an earlier milestone is not live", () => {
+      const p = ladder();
+      milestones(p, ["M1", "M1", "M2"]);
+      shipTwo(p);
+      const r = nextFor(p, "chat-x");
+      expect(r).toMatchObject({ action: "close-milestone", slice: { n: 3 }, gate: { milestone: "M1" } });
+      expect(r.gate?.slices.map((s) => s.n)).toEqual([1, 2]);
+      expect(nextFor(p, "chat-x", { want: 3 })).toMatchObject({ action: "close-milestone", gate: { milestone: "M1" } });
+      for (const s of p.slices.slice(0, 2)) s.live_at = "2026-10-14T10:00:00.000Z";
+      expect(nextFor(p, "chat-x")).toMatchObject({ action: "plan", slice: { n: 3 }, gate: null });
+    });
+
+    test("only the first PR of a milestone is gated, and only before it is planned", () => {
+      const p = ladder();
+      milestones(p, ["M1", "M2", "M2"]);
+      Object.assign(p.slices[0]!, { status: "shipped", pr: 101 });
+      approve(p, 2);
+      expect(nextFor(p, "chat-x", { want: 3 }).action).toBe("plan");
+      approve(p, 3);
+      expect(nextFor(p, "chat-x", { want: 3 }).action).toBe("build");
+      expect(openMilestone(p, p.slices[2]!)).toBeNull();
+      const q = ladder();
+      milestones(q, ["M1", "M2", "M2"]);
+      Object.assign(q.slices[0]!, { status: "shipped", pr: 101 });
+      expect(nextFor(q, "chat-x")).toMatchObject({ action: "close-milestone", slice: { n: 2 } });
+      expect(openMilestone(q, q.slices[2]!)).toBeNull();
+    });
+
+    test("a ladder without milestones is never gated", () => {
+      const p = ladder();
+      for (const s of p.slices) delete s.milestone;
+      shipTwo(p);
+      expect(nextFor(p, "chat-x")).toMatchObject({ action: "plan", gate: null });
+    });
+  });
 });
 
 describe("syncRoadmap", () => {
@@ -483,6 +544,29 @@ describe("syncRoadmap", () => {
     expect(r.md).toContain("**Next up: PR 2, Retry.** Start it in a fresh chat with `/pair plan demo`.");
     expect(r.changed).toEqual(["PR 1: next → draft #4301", "PR 2: not started → next", "Next up → PR 2"]);
     expect(r.md.replace(/\*\*.*\*\*.*$/gm, "")).toBe(ROADMAP.replace(/\*\*.*\*\*.*$/gm, ""));
+  });
+
+  test("live_at makes a shipped PR live and closes the roadmap once every PR is live", () => {
+    const p = valid();
+    for (const s of p.slices) Object.assign(s, { status: "shipped", pr: 4300 + s.n });
+    p.slices[0]!.live_at = "2026-10-14T10:00:00.000Z";
+    expect([stateOf(p.slices[0]!), roadmapStatus(p, p.slices[0]!, "draft #4301")]).toEqual(["live", "live"]);
+    let r = syncRoadmap(ROADMAP, p);
+    expect(r.md).toContain("**PR 1: Greeting** (live)");
+    expect(r.md).toContain("**Next up: nothing; every PR in this roadmap is shipped.**");
+    p.slices[1]!.live_at = "2026-10-14T10:00:00.000Z";
+    r = syncRoadmap(ROADMAP, p);
+    expect(r.md).toContain("**Next up: nothing; every PR is live. This roadmap is done.**");
+  });
+
+  test("Next up asks to close the earlier milestone when the next PR starts a new one", () => {
+    const p = valid();
+    p.slices[1]!.milestone = "M2";
+    Object.assign(p.slices[0]!, { status: "shipped", pr: 4301 });
+    const r = syncRoadmap(ROADMAP, p);
+    expect(r.md).toContain("**Next up: close M1 once PR 1 merges, with `/done demo milestone M1`; then PR 2, Retry.**");
+    p.slices[0]!.live_at = "2026-10-14T10:00:00.000Z";
+    expect(syncRoadmap(ROADMAP, p).md).toContain("**Next up: PR 2, Retry.** Start it in a fresh chat with `/pair plan demo`.");
   });
 
   test("keeps the done line the done skill writes once every PR is live", () => {
@@ -966,6 +1050,17 @@ describe("scratch repo", () => {
     expect(fix.out).toContain("PR 1 is shipped as #101; push the fix through /ship (update mode) after the user's OK");
     expect(pairJson().slices[0]!.status).toBe("shipped");
     expect(JSON.parse(pairAs("chat-n", "next", "--json").out)).toMatchObject({ action: "plan", slice: { n: 2 } });
+  });
+
+  test("slice live records a merged PR as live and refuses one without a PR", () => {
+    const early = pair("slice", "live", "2");
+    expect(early.code).toBe(1);
+    expect(early.err).toContain("PR 2 is not shipped yet");
+    const r = pair("slice", "live", "1", "--json");
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.out)).toMatchObject({ slices: [1], live: [], message: "PR 1 is live." });
+    expect(typeof pairJson().slices[0]!.live_at).toBe("string");
+    expect(roadmap()).toContain("**PR 1: Greeting** (live)");
   });
 
   test("walk --commit resolves the PR from the sha with no PR in progress and HEAD off every PR branch", () => {

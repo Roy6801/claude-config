@@ -40,6 +40,7 @@ Each chat takes one PR of the roadmap from plan to draft PR: plan, build, checkp
 | `pair check` / `pair commit …` | Gate and record each commit (`references/commits.md`) |
 | `pair green` / `pair walk` | Every commit passes its check; the walkthrough source (`references/checkpoint.md`) |
 | `pair slice ship <n> --pr <number>` | Record the draft PR that `/ship` opened |
+| `pair slice live <n>…` | Record merged PRs as live (the `done` skill runs it after it verifies the merge) |
 | `pair roadmap sync` | Rewrite the PR statuses and the Next up line of roadmap.md from the ladder |
 | `pair roadmaps` | Initiatives of this repo with an unshipped PR, for picking the slug |
 
@@ -58,6 +59,7 @@ Run `pair next` (`pair next <n>` for `/pair plan <slug> <n>`, `pair next --imple
 | `fixes` | This chat shipped this PR: take only fixes to it and roadmap updates |
 | `refuse` | This chat holds another PR: say so and ask the handoff question |
 | `no-plan` | `/pair implement` found no approved or half-built PR: say so and point to `/pair plan <slug>` |
+| `close-milestone` | The PR starts a new milestone while an earlier one is not live: ask in plain sentences whether to close that milestone first (merge its drafts, then `/done <slug> milestone <m>`) or plan this PR ahead of it. Ahead: log it with `work.ts decide` and the user's reason, then continue as `plan`. Close first: stop and say which drafts still need to merge |
 | `all-shipped` | Every PR is shipped: say so and offer the `done` skill |
 
 ## One PR per chat
@@ -81,6 +83,7 @@ When the last planned commit lands, run `references/checkpoint.md`: the checkpoi
 Wherever the chat's work ends, close with exactly one yes/no question; on yes, run the `handoff` skill with the starter the script printed, and on no, stop.
 
 - After ship: "PR <n> is open as draft #<number>. Hand off to a fresh chat for PR <n+1>, <name>?" (starter from `pair slice ship`, for example `/pair plan <slug>`).
+- After ship, when the script names closing a milestone next: "PR <n> is open as draft #<number>, and <m> goes live once its PRs merge. Hand off to a fresh chat that closes it with /done after they merge?" (starter from `pair slice ship`).
 - After a plan approved to build later: "Plan saved. Hand off to a fresh chat to build PR <n>?" (starter `/pair implement <slug>`).
 - When refusing another PR in this chat: the after-ship question, naming the PR the user asked for.
 - When nothing is left to ship: say every PR is shipped and offer the `done` skill instead.
@@ -95,6 +98,7 @@ Log only decisions the user made or must know about (a scope change, a conventio
 
 ## Rules
 
+- Shipped means a draft PR is open, not merged. Pair never merges, never checks merges and never waits for them. A PR is live only once `done` verifies its merge and runs `pair slice live`; a milestone is live when every PR in it is.
 - Write everything the user reads in plain sentences, next step first, without internal terms; say "goes live together with PR 3" in place of "merge point".
 - Never push: commits stay local until `/ship` pushes them after the user's OK, and fixes after ship go up the same way (`/ship` in update mode). Never mark a PR ready for review, never merge, never force-push, never pass `--no-verify` to a commit.
 - Never touch a database. If a PR needs data, write a data request for the user to run.

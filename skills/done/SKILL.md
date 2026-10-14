@@ -18,7 +18,7 @@ Work is done when every AC has evidence, the code is merged, and the issue (if t
 | You get | Scope |
 |---|---|
 | `/done <slug>` | The whole roadmap (default): every PR and milestone |
-| `/done <slug> milestone <m>` | Milestone m: the PRs listed under it in roadmap.md |
+| `/done <slug> milestone <m>` | Milestone m: the PRs whose `milestone` in pair.json is m (`pair plan show` groups them) |
 | `/done <slug> pr <n>` | PR n alone |
 | `/done <ticket>` or `/done <issue>` | Work without a roadmap: that ticket or issue and its sub-tickets or linked issues |
 
@@ -67,10 +67,7 @@ Draft a closing comment (what shipped with PR links, the AC table in short form 
 ## 7. Wrap up
 
 - Optional: estimate vs actual per slice from `pair.json` (`est_days` against the first and last commit dates), one line each, for the retro.
-- Mark it in `roadmap.md`, then run `bun $CLAUDE_CONFIG_DIR/skills/pair/scripts/pair.ts roadmap sync --slug <slug>` so the rest stays current:
-  - PR: its status becomes `live`.
-  - Milestone: every PR under it is `live`, and its heading gets ` (done)`.
-  - Roadmap: every milestone is done, and the Next up line becomes exactly `**Next up: nothing; every PR is live. This roadmap is done.**` (roadmap sync keeps that line).
+- Run `bun $CLAUDE_CONFIG_DIR/skills/pair/scripts/pair.ts slice live <n>… --slug <slug>` for each merged PR in scope (step 1 checked the merge). It records them as live in `pair.json` and rewrites the roadmap's statuses and Next up line; once every PR is live the Next up line says the roadmap is done. For a milestone, also add ` (done)` to its heading in `roadmap.md`.
   Older roadmaps with a Steps table use `bun $CLAUDE_CONFIG_DIR/bin/work.ts step - <n> done`.
 - Offer a private artifact page of the completion summary (AC table, PRs, follow-ups); publish only on a yes.
 - When more of the roadmap remains, end with the handoff question from `pair` for the next PR.
