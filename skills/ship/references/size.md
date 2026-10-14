@@ -9,7 +9,7 @@ Net lines hide churn: a rewrite of 600 lines in place nets 0. When `size.added` 
 Show the numbers (`files`, `added`, `deleted`, `net`, `excluded`) and the biggest files (`git diff --numstat <base.ref>...<headRef> | sort -rn | head`), then offer:
 
 1. **Split (recommended unless a reason below applies).** Group the diff into layers bottom to top: shared types, helpers and refactors first, then the behavior built on them, then the UI. Tests ride with the code they cover. Every layer fits the budget, builds, and passes its own tests. Show each layer with its file count and net lines.
-   - With a pair plan: this is a plan change. Hand it to `pair` (`/pair plan`) to add the slices; the plan diff goes to the user. Never split silently at ship time.
+   - With a roadmap: this is a roadmap change. Hand it to `/brainstorm resume <slug>` to split the PR into stacked PRs; the change goes to the user. Never split silently at ship time.
    - Without a plan: optionally propose one GitHub issue per extra layer (referencing the original issue, titles naming the behavior), branches named with `br name`, and a stack plan for `br stack` (`--dry-run` first). Reuse the existing commits per layer; never rewrite the code from scratch. Each step needs its own yes.
 2. **Exception.** Keep it whole when splitting would hurt the reviewer: one atomic migration, a mechanical rename, vendored or generated code that the exclusion patterns miss, a revert. Draft the reasoning for the body's Exceptions section ("<net> net lines because <reason>; a split would <cost>") and get the user's approval of that text.
 

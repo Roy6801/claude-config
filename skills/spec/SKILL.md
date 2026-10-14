@@ -51,7 +51,7 @@ Size is the number of PRs the work needs, not days; a 2 to 3 day task is normal.
    - **Linear connected:** draft in the `ticket` skill's format (Purpose, Business Use Case, User Stories, then the above) and hand the approved text to `ticket` to create or update.
    - **Otherwise:** a GitHub issue through `gh issue view`, then `gh issue create` or `gh issue edit` (body from a file).
    Write the ticket key or issue number into the `ticket:` front matter key and re-run the check.
-8. **Hand off.** The next step is `/pair plan`, which builds the slice ladder from these AC ids. Offer the `handoff` skill first (a fresh session for planning).
+8. **Hand off.** When the roadmap already lists the PRs, the next step is `/pair plan <slug>` for the next PR; otherwise `/brainstorm resume <slug>` places these AC ids on the roadmap's PRs. Offer the `handoff` skill first (a fresh session).
 
 ## Changing an approved spec
 

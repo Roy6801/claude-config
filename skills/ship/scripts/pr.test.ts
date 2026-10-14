@@ -109,6 +109,13 @@ describe("planUpsert", () => {
     expect(() => planUpsert({ ...base, remoteHead: false })).toThrow(/push first/);
   });
 
+  test("dry run on an unpushed branch still plans the create, with a push note", () => {
+    const p = planUpsert({ ...base, remoteHead: false, dryRun: true });
+    expect(p.action).toBe("create");
+    expect(p.argv.slice(0, 2)).toEqual(["pr", "create"]);
+    expect(p.notes.join(" ")).toMatch(/push it first/);
+  });
+
   test("refuses to create without a base, or onto itself", () => {
     expect(() => planUpsert({ ...base, base: null })).toThrow(/no base/);
     expect(() => planUpsert({ ...base, base: "feat/x" })).toThrow(/both/);

@@ -1472,6 +1472,10 @@ const USAGE = `usage: br <command> [--json]
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
+  if (cmd === "--help" || cmd === "-h" || rest.includes("--help") || rest.includes("-h")) {
+    console.log(USAGE);
+    return;
+  }
   const args = parseArgs(rest);
   switch (cmd) {
     case "where":

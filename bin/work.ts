@@ -23,6 +23,7 @@ type Info = {
   decisions: string;
   handoff: string | null;
   step: Step | null;
+  next: { text: string; command: string | null } | null;
   updatedAt: string;
 };
 
@@ -152,6 +153,22 @@ const currentStep = (steps: Step[]) =>
 const stepLine = (s: Step | null, steps: Step[]) =>
   s ? `step ${s.n}/${steps.length}: ${s.step} [${s.status}]` : steps.length ? "all steps done" : "no steps yet";
 
+// Roadmaps written by brainstorm carry a "**Next up: PR <n>, <name>.** Start it ... with `<command>`." line
+// that pair keeps current; older roadmaps carry a "## Steps" table instead.
+function parseNext(md: string): Info["next"] {
+  const line = md.split("\n").find((l) => /^\*\*Next up:/.test(l.trim()));
+  if (!line) return null;
+  const text = line.trim().match(/^\*\*Next up:\s*(.+?)\*\*/)?.[1]?.replace(/\.$/, "").trim() ?? line.trim();
+  const command = line.match(/`(\/[^`]+)`/)?.[1] ?? null;
+  return { text, command };
+}
+
+const statusLine = (i: Info, md: string) => {
+  if (i.next) return `next up: ${i.next.text}${i.next.command ? ` · start with ${i.next.command}` : ""}`;
+  const steps = parseSteps(md);
+  return steps.length ? stepLine(i.step, steps) : "no PRs or steps yet";
+};
+
 function info(slug: string): Info {
   const dir = existing(slug);
   const roadmap = join(dir, "roadmap.md");
@@ -166,29 +183,28 @@ function info(slug: string): Info {
     decisions: join(dir, "decisions.md"),
     handoff: existsSync(handoff) ? handoff : null,
     step: currentStep(parseSteps(md)),
+    next: parseNext(md),
     updatedAt: new Date(Math.max(...mtimes)).toISOString(),
   };
 }
 
 function roadmapSkeleton(slug: string, title: string) {
   return `# ${title}
-Slug: ${slug} · Created: ${stamp().slice(0, 10)} · Source: <ticket/thread/user narration>
 
-## Problem
-<2–4 sentences: what the user asked (Y) and the underlying problem (X)>
+**Next up: PR 1, <short name>.** Start it in a fresh chat with \`/pair plan ${slug}\`.
 
-## Sub-problems
-1. <sub-problem> → <workflow>
+## What we are doing and why
+<2 to 4 plain sentences>
 
-## Steps
-| # | Step | Skill / agents | Produces | User involvement | Effort | Status |
-|---|------|----------------|----------|------------------|--------|--------|
+## Milestone 1: <what users can do when it is done>
 
-## Fresh-session points
-- after step N: <why>
+**PR 1: <short name>** (next)
+<1 to 3 sentences: what users can do after it goes live.>
+Rough plan: <commits in plain words>.
 
-## Risks / open questions
-- …
+## Not in this plan
+
+## Open questions
 `;
 }
 
@@ -226,9 +242,9 @@ function cmdList(args: Args) {
     : [];
   const rows = slugs.map((slug) => {
     const i = info(slug);
-    const steps = parseSteps(readFileSync(i.roadmap, "utf8"));
+    const md = readFileSync(i.roadmap, "utf8");
     const cwds = Object.entries(active).filter(([, v]) => v.slug === slug).map(([k]) => k);
-    return { slug, title: i.title, step: stepLine(i.step, steps), updatedAt: i.updatedAt, activeCwds: cwds };
+    return { slug, title: i.title, step: statusLine(i, md), next: i.next, updatedAt: i.updatedAt, activeCwds: cwds };
   });
   rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   emit(args.flags.has("--json"), rows, () => {
@@ -258,10 +274,10 @@ function cmdCurrent(args: Args) {
     return emit(args.flags.has("--json"), { slug: null, cwd }, () => console.log(`no active initiative for ${cwd}`));
   }
   const i = info(hit.slug);
-  const steps = parseSteps(readFileSync(i.roadmap, "utf8"));
-  emit(args.flags.has("--json"), { ...i, stepLine: stepLine(i.step, steps), activeFor: hit.cwd }, () => {
+  const line = statusLine(i, readFileSync(i.roadmap, "utf8"));
+  emit(args.flags.has("--json"), { ...i, stepLine: line, activeFor: hit.cwd }, () => {
     console.log(`${i.title} (${i.slug})`);
-    console.log(`current: ${stepLine(i.step, steps)}`);
+    console.log(`current: ${line}`);
     console.log(`roadmap: ${i.roadmap}`);
     console.log(`decisions: ${i.decisions}`);
     console.log(`handoff: ${i.handoff ?? "none yet"}`);
@@ -300,7 +316,7 @@ function cmdStep(args: Args) {
   const file = join(existing(slug), "roadmap.md");
   const lines = readFileSync(file, "utf8").split("\n");
   const [start, end] = stepsSection(lines);
-  if (start < 0) throw new UserError(`no "## Steps" section in ${file}`);
+  if (start < 0) throw new UserError(`no "## Steps" section in ${file}: this roadmap lists PRs, and pair keeps their statuses current (pair roadmap sync)`);
   const idx = lines.findIndex((l, i) => i > start && i < end && new RegExp(`^\\|\\s*${Number(nRaw)}\\s*\\|`).test(l));
   if (idx < 0) {
     const count = parseSteps(lines.join("\n")).length;
@@ -351,14 +367,16 @@ async function cmdHandoff(args: Args) {
   }
 
   const l = mode === "compact" ? null : launcher();
-  const starter = l ? startLine(str(args, "--resume") ?? `/brainstorm resume ${slug}`, l) : `/compact ${focus}`;
+  const command = mode === "compact" ? `/compact ${focus}` : (str(args, "--resume") ?? `/brainstorm resume ${slug}`);
+  const terminal = l ? startLine(command, l) : null;
   const inSession = l ? resumeLines(slug, l).inSession : null;
-  const copied = await copy(starter);
-  emit(args.flags.has("--json"), { slug, mode, handoff: written, archived, starter, inSession, copied }, () => {
+  const copied = await copy(command);
+  emit(args.flags.has("--json"), { slug, mode, handoff: written, archived, starter: command, terminal, inSession, copied }, () => {
     if (archived) console.log(`archived previous handoff to ${archived}`);
     if (written) console.log(`wrote ${written}`);
-    console.log(copied ? `copied to clipboard: ${starter}` : `pbcopy unavailable, copy this: ${starter}`);
-    if (inSession) console.log(`in an open session: ${inSession}`);
+    console.log(copied ? `copied to clipboard: ${command}` : `pbcopy unavailable, copy this: ${command}`);
+    if (terminal) console.log(`or from a terminal: ${terminal}`);
+    if (inSession) console.log(`or in an open session: ${inSession}`);
   });
 }
 
@@ -374,6 +392,10 @@ const USAGE = `usage: work <command>
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
+  if (cmd === "--help" || cmd === "-h" || rest.includes("--help") || rest.includes("-h")) {
+    console.log(USAGE);
+    return;
+  }
   const args = parseArgs(rest);
   switch (cmd) {
     case "new":

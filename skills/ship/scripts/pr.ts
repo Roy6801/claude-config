@@ -134,13 +134,16 @@ export type UpsertPlan = { action: "create" | "edit"; argv: string[]; notes: str
 // Decides the gh call for upsert. Never includes --ready, never toggles draft state.
 export function planUpsert(o: {
   repo: string; branch: string; title: string; bodyFile: string; base: string | null;
-  pr: OpenPr | null; inStack: boolean; remoteHead: boolean; attach?: string[];
+  pr: OpenPr | null; inStack: boolean; remoteHead: boolean; attach?: string[]; dryRun?: boolean;
 }): UpsertPlan {
   const notes: string[] = [];
   if (!o.pr) {
     if (!o.base) throw new UserError("no base: pass --base <branch>");
     if (o.base === o.branch) throw new UserError(`base and head are both ${o.branch}`);
-    if (!o.remoteHead) throw new UserError(`origin/${o.branch} does not exist; push first (br push ${o.branch})`);
+    if (!o.remoteHead) {
+      if (!o.dryRun) throw new UserError(`origin/${o.branch} does not exist; push first (br push ${o.branch})`);
+      notes.push(`origin/${o.branch} does not exist yet; push it first (br push ${o.branch}) before running this`);
+    }
     return {
       action: "create",
       argv: ["pr", "create", "--repo", o.repo, "--draft", "--assignee", "@me", "--head", o.branch, "--base", o.base, "--title", o.title, "--body-file", o.bodyFile, ...attachArgs(o.attach)],
@@ -344,7 +347,7 @@ async function upsert(args: Args) {
   let base = str(args, "--base") ?? null;
   if (!base && !pr) base = chooseBase(null, stack, await integrationTarget(ctx.local.root))?.branch ?? null;
   const remote = await exec(["git", "ls-remote", "--exit-code", "origin", `refs/heads/${ctx.branch}`], ctx.local.root);
-  const plan = planUpsert({ repo: ctx.repo, branch: ctx.branch, title, bodyFile: file, base, pr, inStack: !!stack, remoteHead: remote.code === 0, attach: args.attach });
+  const plan = planUpsert({ repo: ctx.repo, branch: ctx.branch, title, bodyFile: file, base, pr, inStack: !!stack, remoteHead: remote.code === 0, attach: args.attach, dryRun: args.flags.has("--dry-run") });
   for (const n of plan.notes) warn(n);
   if (args.flags.has("--dry-run")) {
     emit(args.flags.has("--json"), { dryRun: true, action: plan.action, command: ["gh", ...plan.argv] }, () =>

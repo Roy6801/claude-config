@@ -13,12 +13,13 @@ Ask each question of the output, answer it honestly, and fix the output when an 
 5. **XY check.** Does this solve what the user actually needs, or only the thing they literally asked for?
 6. **Simpler path.** Is there a smaller change, an existing helper, or a convention that already does this?
 7. **What would change my mind.** What single fact, if found, would flip the recommendation? Can it be checked now?
+8. **What ships first** (roadmaps and plans). What ships first, and why not today? Recut the plan when nothing can go live before the last build step, or when an item is a phase across PRs instead of a deliverable.
 
 Skip a question only when it cannot apply (for example, "what breaks first" on a pure summary).
 
 ## Output
 
-Show at most 6 bullets, each a question and its answer, chosen for what actually turned up. A bullet that only says "fine" is noise; leave it out unless the question was a real risk that checked out.
+Show at most 6 bullets, each a question and its answer, chosen for what actually turned up. A bullet that only says "fine" is noise; leave it out unless the question was a real risk that checked out. On a roadmap, Ships first always appears.
 
 ```markdown
 **Grilled**
@@ -27,6 +28,7 @@ Show at most 6 bullets, each a question and its answer, chosen for what actually
 - Breaks first → <failure>; <handled / open>
 - Simpler path → <option>; <why not, or switched to it>
 - Would change my mind → <fact>; <checked: result, or not checked>
+- Ships first → <PR or deliverable>; <why not today>
 ```
 
 When the grill changed the output, say what changed in one line under the block.

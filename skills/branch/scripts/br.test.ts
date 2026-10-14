@@ -401,3 +401,15 @@ describe("br env in a scratch repo", () => {
     expect(run(join(wts, "a"), "--check", "--overwrite").code).toBe(1);
   });
 });
+
+describe("--help", () => {
+  const help = (...a: string[]) => Bun.spawnSync(["bun", join(import.meta.dir, "br.ts"), ...a], { cwd: tmpdir() });
+  test("prints usage and exits 0 at the top level and on a subcommand", () => {
+    for (const a of [["--help"], ["-h"], ["new", "--help"], ["stack", "-h"]]) {
+      const r = help(...a);
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout.toString()).toContain("usage: br <command>");
+      expect(r.stderr.toString()).toBe("");
+    }
+  });
+});

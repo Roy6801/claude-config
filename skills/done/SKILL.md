@@ -1,9 +1,9 @@
 ---
 name: done
 description: |
-  Close a piece of work properly. Verifies every acceptance criterion has real evidence (QA verdicts, tests, PR links, screenshots) and lists the gaps, checks the definition of done and that the PRs merged, self-grills "is it really done?", drafts the closing comment and status change (through `ticket` when Linear is connected, else on the GitHub issue), files follow-up issues for loose ends, marks the roadmap step done, and offers `handoff`. Every outward write is shown in full and runs only after approval.
+  Close a piece of work properly, at one of three scopes: a PR, a milestone, or the whole roadmap (the default). Verifies every acceptance criterion in scope has real evidence (QA verdicts, tests, PR links, screenshots) and lists the gaps, checks that the PRs merged and the definition of done, self-grills "is it really done?", drafts the closing comments and status changes (through `ticket` when Linear is connected, else on the GitHub issues), files follow-up issues for loose ends, marks the PR, milestone or roadmap done in roadmap.md, and offers `handoff`. Every outward write is shown in full and runs only after approval.
 
-  Use when: the last slice of a piece of work merged, an issue's work is complete, a brainstorm roadmap step is "done" or "close out", or asked to "wrap this up", "close the issue", "are we done", "mark it done", or `/done [slug|issue]`.
+  Use when: a PR merged, a milestone's PRs all merged, a whole roadmap is finished, a ticket's or issue's work is complete, or asked to "wrap this up", "close the issue", "are we done", "mark it done", or `/done [<slug>] [pr <n> | milestone <m>]`, `/done <ticket|issue>`.
 user-invocable: true
 metadata:
   origin: local
@@ -13,12 +13,25 @@ metadata:
 
 Work is done when every AC has evidence, the code is merged, and the issue (if there is one) says so. This skill checks all three and fixes what it can with the user's approval. It never closes anything on assumption.
 
+## Scope
+
+| You get | Scope |
+|---|---|
+| `/done <slug>` | The whole roadmap (default): every PR and milestone |
+| `/done <slug> milestone <m>` | Milestone m: the PRs listed under it in roadmap.md |
+| `/done <slug> pr <n>` | PR n alone |
+| `/done <ticket>` or `/done <issue>` | Work without a roadmap: that ticket or issue and its sub-tickets or linked issues |
+
+With a slug, close that roadmap at the given scope without asking which. Without one, run `work.ts list`: one match, name it and ask the user to confirm; several or none, list them and ask. Never guess. Say the scope in one line before loading.
+
+Everything below runs on the scope only: its ACs, its PRs, its tickets or issues. A PR scope closes the PR's own ticket or issue; a milestone closes its PRs' tickets or issues; the roadmap closes every remaining one and then the parent, when there is one.
+
 ## 1. Load
 
 - Initiative: `bun $CLAUDE_CONFIG_DIR/bin/work.ts current --json` (or the slug given). Read `roadmap.md`, `decisions.md`, `spec.md` and `pair.json` in its directory if they exist, and the newest `qa-*.md` reports.
 - ACs: `bun $CLAUDE_CONFIG_DIR/skills/spec/scripts/spec.ts acs <slug> --json`. No spec: the ticket's or issue's Acceptance Criteria checkboxes are the ACs.
-- Ticket or issue, for the spec's `ticket:` key (or the one given) plus each slice's from `pair.json`: `ticket` read mode for a Linear key when Linear is connected, else `gh issue view <n> --json title,body,state,comments`.
-- PRs: for each slice branch or linked PR, `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts pr <branch|number> --json` (state, merged, base, checks, unresolved threads).
+- Ticket or issue for each PR in scope (from `pair.json`), plus the parent for the roadmap scope (the spec's `ticket:` key, or the one given): `ticket` read mode for a Linear key when Linear is connected, else `gh issue view <n> --json title,body,state,comments`.
+- PRs: for each PR in scope (its branch, or its `pr` number in `pair.json`), `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts pr <branch|number> --json` (state, merged, base, checks, unresolved threads).
 
 No initiative and no issue given: ask which piece of work to close.
 
@@ -54,9 +67,13 @@ Draft a closing comment (what shipped with PR links, the AC table in short form 
 ## 7. Wrap up
 
 - Optional: estimate vs actual per slice from `pair.json` (`est_days` against the first and last commit dates), one line each, for the retro.
-- Mark the roadmap step done: `bun $CLAUDE_CONFIG_DIR/bin/work.ts step - <n> done`, after confirming which step.
+- Mark it in `roadmap.md`, then run `bun $CLAUDE_CONFIG_DIR/skills/pair/scripts/pair.ts roadmap sync --slug <slug>` so the rest stays current:
+  - PR: its status becomes `live`.
+  - Milestone: every PR under it is `live`, and its heading gets ` (done)`.
+  - Roadmap: every milestone is done, and the Next up line becomes exactly `**Next up: nothing; every PR is live. This roadmap is done.**` (roadmap sync keeps that line).
+  Older roadmaps with a Steps table use `bun $CLAUDE_CONFIG_DIR/bin/work.ts step - <n> done`.
 - Offer a private artifact page of the completion summary (AC table, PRs, follow-ups); publish only on a yes.
-- Offer `handoff` when more work follows in this initiative.
+- When more of the roadmap remains, end with the handoff question from `pair` for the next PR.
 
 ## Rules
 

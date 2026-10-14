@@ -1,9 +1,9 @@
 ---
 name: pair
 description: |
-  Interactive coding, on by default. Plans the work as a ladder of small slices (one branch and one draft PR each, at most 500 net lines, each adding one behaviour the user can test alone) and approves the ladder and each slice plan as plan mode gates, then builds each slice as planned atomic commits whose messages record why, what changed per file, alternatives, deviations and checks, and closes every slice with a checkpoint: simplify, thermo and conventions review, green check on every commit, the user's own test, QA per AC, and a commit-by-commit walkthrough before the user's OK. The `builder` agent implements one planned commit at a time; the main thread reviews, stages and commits. State lives in pair.json under the initiative directory, never in the repo.
+  One PR per chat from a brainstorm roadmap. Plans the next unshipped PR in plan mode (an elaborate plan: every commit's change, files, snippets, tests and check), builds it as planned atomic commits through the `builder` agent without pausing, runs the checkpoint (simplify, review, green on every commit, QA per AC), walks the user through every commit in one message, ships the draft PR with `/ship`, keeps roadmap.md current, and offers the handoff to the next PR. The ladder lives in pair.json in the initiative directory, never in the repo.
 
-  Use when: a spec is approved and implementation is next, a brainstorm roadmap step is "plan and build", the user asks to "plan the slices", "plan the commits", "build this", "continue", "what's next on the slice", "walk me through the commits", or runs `/pair plan`, `/pair`, `/pair checkpoint`, `/pair status`, `/pair off`, `/pair on`, or `/pair resume`.
+  Use when: `/pair plan <slug> [<n>]`, `/pair implement <slug>`, `/pair status <slug>`, or a handoff starter names one; the user asks to "build the next PR", "continue the PR", "build the approved plan", "where are we on the roadmap"; or review comments, CI failures or test findings arrive for the PR this chat shipped.
 user-invocable: true
 metadata:
   origin: local
@@ -11,76 +11,93 @@ metadata:
 
 # Pair
 
-Work grows from small to large in slices the user can test one at a time. Each slice is one branch and one draft PR; each commit is atomic, keeps the repo green, and records its reasoning, so the git history is the decision record. The main thread holds the dialogue, the decisions and the gates; the `builder` agent writes the code for one planned commit at a time.
+Each chat takes one PR of the roadmap from plan to draft PR: plan, build, checkpoint, walkthrough, ship, then hand off. Brainstorm owns the whole feature (milestones, PR order, tickets or issues, branch names, the stack); pair owns one PR at a time. The main thread holds the dialogue, the decisions and the gates; the `builder` agent writes the code for one planned commit at a time.
+
+## Arguments and the roadmap
+
+| You get | Meaning |
+|---|---|
+| `/pair plan <slug>` | Plan the next unshipped PR of that roadmap in plan mode, then build it in this chat unless the user says build later |
+| `/pair plan <slug> <n>` | Same for PR n, jumping ahead; relay the script's warning about earlier unshipped PRs |
+| `/pair implement <slug>` | Build the PR whose plan is approved, or continue a half-built one, from its `pr-<n>-plan.md` |
+| `/pair status <slug>` | Where the roadmap stands and how the current PR is doing |
+| `/pair` alone | Works as `/pair plan` |
+
+**With a slug**, pair resumes that roadmap: pass `--slug <slug>` to every script call and ask nothing about which roadmap. **Without a slug**, run `pair roadmaps` and never guess. Exactly one initiative of this repo has an unshipped PR: name it with its Next up line in one sentence and ask the user to confirm. Several or none: ask what the user is pointing to, listing each candidate slug with its Next up line, plus "new work: start with /brainstorm".
 
 ## Running the script
 
-`pair` means `bun <base directory of this skill>/scripts/pair.ts`. It resolves the initiative with `work.ts current --json` (or `--slug <slug>`), and every command takes `--json`. Failures print one line to stderr and exit 1; exit 2 from `pair check` means "stop and ask the user". Do not re-implement a step with raw git: if the script cannot do it, say so.
+`pair` means `bun $CLAUDE_CONFIG_DIR/skills/pair/scripts/pair.ts`, always with `--slug <slug>` (except `pair roadmaps`). Every command takes `--json`. Failures print one line to stderr and exit 1; exit 2 from `pair check` means stop and ask the user. Warnings go to stderr; relay them. Do a step through the script, never with raw git; when the script cannot do it, say so.
 
-| Command | Does |
+| Command | Use it to |
 |---|---|
-| `pair plan save <file>` / `pair plan show` | Validate and store the ladder (also writes `stack.json` for `br stack`); print the ladder, timeline and AC coverage |
-| `pair status` | Current slice and commit, commits done/planned, net lines vs budget, time vs estimate, mode |
-| `pair check` | Compare the working changes with the planned commit's files and the slice budget |
-| `pair commit --why … --notes <file.json> [--title …] [--alt …] [--deviation …] [--noticed …] [--checked …]` | Commit what is staged as the next planned commit (or, with `--title`, an extra commit) with the full message |
-| `pair green [--slice n]` | Run the slice's check on every commit of the slice; SHAs never change |
-| `pair walk [--slice n \| --commit <sha>]` | Plain-text walkthrough, deviations first |
-| `pair slice start n` / `pair slice done n` | Status transitions; `start` prints the `br new` commands for the branch, `done` needs every commit done |
-| `pair mode on\|off` | Interactive mode switch |
+| `pair next [<n>] [--implement]` | Route a `/pair` call: prints the action for this chat (below) |
+| `pair status` | Every PR's state, this chat's PR, the current PR's commits, size and time |
+| `pair plan show` | The ladder by milestone, timeline against the deadline, AC coverage |
+| `pair plan save <slice.json> --slice <n> --plan <plan.md>` | Store an approved PR plan (see `references/plan-mode.md`) |
+| `pair plan save <ladder.json>` | Store a whole ladder (brainstorm's job; pair uses it only when the user changes the roadmap here) |
+| `pair slice start <n>` | This chat takes PR n; prints the `br new` command for its branch |
+| `pair check` / `pair commit …` | Gate and record each commit (`references/commits.md`) |
+| `pair green` / `pair walk` | Every commit passes its check; the walkthrough source (`references/checkpoint.md`) |
+| `pair slice ship <n> --pr <number>` | Record the draft PR that `/ship` opened |
+| `pair roadmap sync` | Rewrite the PR statuses and the Next up line of roadmap.md from the ladder |
+| `pair roadmaps` | Initiatives of this repo with an unshipped PR, for picking the slug |
 
-State: `$CLAUDE_CONFIG_DIR/state/work/<slug>/pair.json`. Branch and push mechanics belong to the `branch` skill (`br`); initiative state belongs to `bun $CLAUDE_CONFIG_DIR/bin/work.ts`.
+State lives in `$CLAUDE_CONFIG_DIR/state/work/<slug>/`: `pair.json` (the ladder, the machine record; shape in `references/ladder.md`), `pr-<n>-plan.md` (each approved plan), and `roadmap.md` (the readable tracker). Plan save, slice start, commit and slice ship rewrite the roadmap's status parts on their own; run `pair roadmap sync` after any hand edit to the ladder.
 
-## Modes
+## Routing
 
-- `/pair plan`: build the ladder and approve it in plan mode, then set up issues and branches (sections 1 and 2).
-- `/pair`: continue. Run `pair status`; if the current slice has a todo commit, build it (section 3); if the slice is in `checkpoint` (set by `pair commit` when the last planned commit lands), run the checkpoint (section 4); if no slice is active, offer `pair slice start <next>`.
-- `/pair checkpoint`: run the checkpoint for the current slice now.
-- `/pair status`: run `pair status` and `pair plan show`, and relay both, at-risk flags first.
-- `/pair off` and `/pair on`: run `pair mode off|on` and confirm in one line. Off skips the slice and re-plan gates and the per-commit review ceremony (see section 3).
-- `/pair resume`: run `work.ts current`, read `roadmap.md`, `decisions.md`, `handoff.md` and `pair.json`, run `pair status`, summarize in five lines (goal, slice, commit, last decision, next action), then continue as `/pair`.
+Run `pair next` (`pair next <n>` for `/pair plan <slug> <n>`, `pair next --implement` for `/pair implement <slug>`), say in one line which PR and which step, then act on its `action`:
 
-## 1. Plan the ladder (ladder gate)
+| Action | Do |
+|---|---|
+| `plan` | No approved plan yet: run the plan gate (`references/plan-mode.md`), then build |
+| `build` | Plan approved, possibly half built: read `plan_file` and the ladder, `pair slice start <n>`, build from the next unbuilt commit |
+| `checkpoint` | Built in this chat: the full checkpoint, then walkthrough and ship |
+| `ship` | Built in an earlier chat: `pair slice start <n>` (it holds the PR for this chat and prints the branch command), then green, walkthrough, ship; no plan gate, no rebuild |
+| `fixes` | This chat shipped this PR: take only fixes to it and roadmap updates |
+| `refuse` | This chat holds another PR: say so and ask the handoff question |
+| `no-plan` | `/pair implement` found no approved or half-built PR: say so and point to `/pair plan <slug>` |
+| `all-shipped` | Every PR is shipped: say so and offer the `done` skill |
 
-Approvals in pair are plan mode **gates**: the ladder gate here, a slice gate before each slice, and a re-plan gate when a slice goes sideways. Read `references/plan-mode.md` before opening any gate; it holds when each gate opens or is skipped, how to run it, the plan file templates, and the writes that follow approval.
+## One PR per chat
 
-Inputs, gathered by agents so the main thread stays free: the spec's ACs (`bun $CLAUDE_CONFIG_DIR/skills/spec/scripts/spec.ts acs <slug> --json`), the `gather-context` skill in conventions mode (patterns to follow with file:line, and the check commands), and `br target`. If there is no approved spec, say so and offer the `spec` skill first.
+The script holds each chat to one PR through `CLAUDE_CODE_SESSION_ID`: the chat that saves a PR's plan, starts it, commits to it or ships it holds it. A fresh chat may take over a PR an earlier chat held (a handoff mid-PR); a chat that holds a PR is refused any other. After `/ship`, the chat takes only fixes to its PR (review comments, CI failures, the user's test findings, each as an extra commit through `pair commit --title`) and roadmap updates. Pass `--batch` only when the user explicitly asks to work on more than one PR in this chat.
 
-Build the ladder smallest-first by the rules in `references/ladder.md`: slice 1 is the thinnest end-to-end path, every later slice adds one behaviour the user can test alone, prefactor slices come first, risky work comes early, slices group into demo-able milestones, and no slice exceeds 500 net lines. Estimate days per slice and compare the total with the deadline; when it does not fit, show the gap and the options (cut scope, put it behind a flag, move it to a follow-up slice, move the date). Never squeeze estimates to make it fit.
+## Plan
 
-Library decisions: read the docs (context7) and the library's GitHub source and issues, through an agent, before proposing anything. Every real decision goes to the user as options with a recommendation, then into `work.ts decide`. Planned exceptions to the repo's conventions are listed in the slice with their reasons, for the user to approve.
+Run the plan gate in `references/plan-mode.md` for this PR only. The plan is elaborate: every commit carries its plain explanation, files, real snippets, tests and check. On approval, save the plan before any code edit, so a chat that dies mid-build resumes with `/pair implement <slug>`. Then build in this chat, unless the user said to build later: then write no code and ask the build-later handoff question below.
 
-Run the self-grill checklist (`$CLAUDE_CONFIG_DIR/skills/brainstorm/references/self-grill.md`) on the ladder and put the Grilled block in the plan file. Invite the user to grill it in turn; apply their edits to the plan file. Offer a private artifact page of the plan (ladder, milestones, timeline, AC coverage, exceptions). On approval, run the after-approval steps in `references/plan-mode.md`: the ladder JSON (shape in `references/ladder.md`) goes to a draft file in the initiative directory, then `pair plan save <file>`, `pair plan show`, and `work.ts decide` for the approval and every logged decision.
+## Build
 
-## 2. Set up (after approval, each step confirmed)
+Run `pair slice start <n>`; ask whether to switch here or open a worktree when that is not already clear, and run the printed `br new` command. Then build the whole PR in one run, commit after commit, with no pause for the user between commits: builder, review of its diff, `pair check`, the commit's check, staging by path, `pair commit`, `br push`. The loop and the message format are in `references/commits.md`. Stop only for a `pair check` exit 2, a planned commit that proves wrong, or about 30 minutes blocked; each of those goes to the user as options with a recommendation, and an answer that changes the plan opens the re-plan gate.
 
-1. **Tickets or issues (optional).** When Linear is connected, offer a parent ticket plus one sub-ticket per slice through the `ticket` skill; otherwise a GitHub issue per slice (`gh issue create`), linked to the spec's issue when there is one. Titles name the feature behaviour, never "part 1 of N". Show the exact titles and bodies and create nothing without the user's yes.
-2. **Branches.** Run `br name` for each slice and show the suggested names; the user confirms or edits them. Put the confirmed names in the plan and re-run `pair plan save`.
-3. **Stack.** `pair plan save` writes `stack.json` next to `pair.json` and prints its path. Run `br stack <that path> --dry-run` and show the output; on the user's OK run it without `--dry-run`. Add `--draft-prs` only if the user wants draft PRs now; PRs open only for layers that have commits, so most appear after a slice's first commit (rerun later). The open-PR cap is optional: pass `--cap <n>` only when the user sets one (`br` falls back to 5 with `--draft-prs`, so pass a number above the slice count when they want none).
+## Checkpoint, walkthrough, ship
 
-## 3. Build, one commit at a time
+When the last planned commit lands, run `references/checkpoint.md`: the checkpoint, then one question asking whether to walk through the PR (with the steps to check it themselves), the walkthrough of every commit in one message, the user's one OK, `/ship`, and `pair slice ship <n> --pr <number>`.
 
-Open the slice gate (`references/plan-mode.md`) unless the slice qualifies to skip it. After approval, run `pair slice start n`. It prints `br new <branch> --here --base <previous slice branch or base>` and a `--worktree` variant; ask the user which one when it is not already clear, then run it (`pair commit` refuses unless HEAD is on the slice branch). Then, for each planned commit in order:
+## Handoff questions
 
-1. Dispatch the `builder` agent (`$CLAUDE_CONFIG_DIR/agents/builder.md`) with the commit's title, why, files, patterns, ACs, check command and constraints (template in `references/commits.md`).
-2. Review the diff yourself. Fix small problems inline or send the builder back with specific corrections.
-3. Run `pair check`. Exit 2 means a file is outside the plan or the budget is exceeded: stop and ask the user whether to split, move the change to another commit or slice, or raise the limit with a reason. An answer that changes the plan opens the re-plan gate.
-4. Run the commit's check command and read its output.
-5. Stage the planned files explicitly by path (never `git add -A` or `git add .`), write the notes JSON, and run `pair commit` with the why, alternatives, deviation, noticed and checked values (format in `references/commits.md`).
-6. Push with `br push` (never force). Give the user one line: the commit title, the check result, and anything noticed.
+Wherever the chat's work ends, close with exactly one yes/no question; on yes, run the `handoff` skill with the starter the script printed, and on no, stop.
 
-If you have been blocked for about 30 minutes, say so with what was tried and what you suspect, and open the re-plan gate. When a step is unclear, run a quick grilling round instead of guessing.
+- After ship: "PR <n> is open as draft #<number>. Hand off to a fresh chat for PR <n+1>, <name>?" (starter from `pair slice ship`, for example `/pair plan <slug>`).
+- After a plan approved to build later: "Plan saved. Hand off to a fresh chat to build PR <n>?" (starter `/pair implement <slug>`).
+- When refusing another PR in this chat: the after-ship question, naming the PR the user asked for.
+- When nothing is left to ship: say every PR is shipped and offer the `done` skill instead.
 
-**Mode off.** Skip the slice and re-plan gates, the per-commit review pause and the one-line report, and implement directly or through the builder. Still commit atomically through `pair commit` with the same message format, and still run the checkpoint at the end of the slice.
+## Status
 
-## 4. Checkpoint (per slice)
+For `/pair status <slug>`, run `pair status` and relay it in plain sentences: how many PRs shipped, each PR's state in one line, this chat's PR, the next step and its starter, then the current PR's commits, size and time. Warnings first.
 
-Run the steps in `references/checkpoint.md`, in order: `review slice` (simplify, reviewer with thermo and conventions, AC conformance), `pair green`, the user's test script, QA per AC, the walkthrough, then the user's OK, `pair slice done n` and `work.ts step`. Afterwards offer the `handoff` skill: each new slice starts best in a fresh session.
+## Decisions
+
+Log only decisions the user made or must know about (a scope change, a convention exception, a plan change after approval) with `bun $CLAUDE_CONFIG_DIR/bin/work.ts decide - … --by user`; use `--by claude` only for a choice you proposed and the user explicitly approved. Skip mechanical ones. Every real decision reaches the user as options in prose with a recommendation first.
 
 ## Rules
 
+- Write everything the user reads in plain sentences, next step first, without internal terms; say "goes live together with PR 3" in place of "merge point".
 - Never mark a PR ready for review, never merge, never force-push, never pass `--no-verify` to a commit.
-- Never touch a database. If a slice needs data, write a data request for the user to run.
-- Never add AI attribution, session links or trailers to commits, PRs or issues.
+- Never touch a database. If a PR needs data, write a data request for the user to run.
+- Never add AI attribution, session links or trailers to commits, PRs, tickets or issues.
 - Keep pair state out of repositories and `.git`; it lives only in the initiative directory.
 - Ticket, issue and PR writes happen only after the user approves the exact content.
-- Write plans, walkthroughs and questions in full, clear sentences. Status lines can be short.
