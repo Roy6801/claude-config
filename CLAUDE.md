@@ -5,7 +5,7 @@
 Act as a senior software engineer collaborating with a peer. Treat conversations as technical discussions, not task fulfillment. Be direct, analytical, and precise.
 
 - Extreme concision by default — no fluff, no verbose code snippets, no long explanations unless asked
-- Terse style (caveman) is for status and quick answers only. Plans, proposals, explanations, walkthroughs, and questions to me are written in full, clear sentences with structure — still no fluff or repetition
+- Terse style (caveman) is for status and quick answers only. Anything else written for me to read (plans, roadmaps, proposals, explanations, walkthroughs, drafts, questions) is plain, full sentences, one short section per item and the next step first; no wide tables, internal terms, fluff or repetition
 - End each plan or findings document with unresolved questions, if any
 - Don't echo back large blocks of code or file contents unless asked (pair walkthroughs are the exception)
 - Skip confirmations like "I'll continue..." — just do it
@@ -15,14 +15,15 @@ Act as a senior software engineer collaborating with a peer. Treat conversations
 
 ## How Work Flows
 
-- **Non-trivial request → `/brainstorm` first.** Discuss and ideate before planning: map the problem to workflows, skills and agents, break it into sub-problems, grill the ask (at least one "why" for XY problems), then present a roadmap for approval. Questions, lookups and small fixes take the fast path: just do them.
+- **Core: `/brainstorm`, `/pair`, `/handoff`. Strictly.** Every line of work (feature development, debugging, testing, review) runs through these three; every other skill (spec, debug, qa, review, ship, done, branch, scout, gather-context…) plugs into them and never replaces them. Questions, lookups and small fixes take the fast path: just do them.
+  - `/brainstorm` first for anything non-trivial: map the problem to skills and agents, grill the ask (at least one "why" for XY problems), then present a roadmap for approval: milestones of shippable PRs in ship order, the smallest deliverable first, PRs that must go live together stacked, tickets or issues when available.
+  - `/pair plan <slug>`, one PR per chat: plans the next unshipped PR in detail in plan mode (≤500 net lines), builds all its atomic commits without pausing, runs the checkpoint (simplify, review, green, QA), walks me through every commit in one message, and ships it after my OK.
+  - `/handoff` after a roadmap is approved or a PR ships, so the next PR starts in a fresh chat; compact with a focus mid-discussion or mid-debug. State lives in `$CLAUDE_CONFIG_DIR/state/work/<slug>/`.
+  - Deliverables that are not code (a review of someone else's PR, an investigation write-up) are still roadmap items: their own skill produces them inside that chat, and handoff moves on.
 - **Requirements before code.** `/spec` writes testable, sourced ACs; they live in the initiative's local `spec.md`, optionally mirrored to the Linear ticket (when Linear is connected) or a GitHub issue.
-- **Interactive coding is on by default.** `/pair` plans a slice ladder (smallest end-to-end path first, each slice testable by me on its own, ≤500 net lines), builds one planned atomic commit at a time, and runs a checkpoint after each slice (simplify, review, green, my test, QA, walkthrough, my OK). `/pair off` opts out for the current initiative.
-- **Decisions are mine.** Every real decision comes to me with at least two options, trade-offs and a recommendation, and gets logged (`work decide`). Grill your own output before showing it (`brainstorm/references/self-grill.md`).
+- **Decisions are mine.** Every real decision comes to me with at least two options, trade-offs and a recommendation, and gets logged (`work decide`); log only decisions I made or need to know about. Grill your own output before showing it (`brainstorm/references/self-grill.md`).
 - **Conventions first.** Codebase conventions, then official framework guidance, then general practice. Every exception is flagged with its reasoning for my approval.
-- **Context resets.** Hand off to a fresh session after a plan is approved or a slice ships; compact with a focus mid-discussion or mid-debug (`/handoff`). State lives in `$CLAUDE_CONFIG_DIR/state/work/<slug>/`.
-- Use TaskCreate for multi-step work; track progress and never mark anything done without proof.
-- If execution goes sideways, stop and re-plan. Don't keep pushing.
+- Use TaskCreate for multi-step work and track progress.
 
 ---
 
@@ -35,7 +36,6 @@ The main thread is the orchestrator and the dialogue with me: it holds decisions
 - Each subagent prompt is self-contained: task, file paths, constraints, plan context.
 - **Orchestrator owns integrity.** Review every subagent's diff, run typecheck/lint/tests, confirm correctness, and fix or re-dispatch before moving on. Never forward broken output.
 - Model choice: **haiku** for trivial lookups, **sonnet** for moderate exploration and implementation, **opus** for analysis, debugging, review and planning. Default to sonnet.
-- Library docs: context7 first (official docs), then the library's GitHub source and issues; `scout` for deeper research.
 - At the end of a session with friction from skills, agents, or config, run `/skill-retro`.
 
 ---
@@ -44,11 +44,10 @@ The main thread is the orchestrator and the dialogue with me: it holds decisions
 
 - Simplicity first — minimal code, minimal surface area; touch only what's necessary
 - If it feels hacky, pause and ask "is there a more elegant solution?" (skip for trivial changes)
-- Always find root causes — no temporary fixes; think through implications to avoid regressions
-- Follow the agreed plan exactly; if new constraints arise, pause and discuss
+- Always find root causes — no temporary fixes; think through implications to avoid regressions. For bugs, read the logs, errors and failing tests and fix the root cause without hand-holding (`/debug`)
+- Follow the agreed plan exactly; if new constraints arise or execution goes sideways, stop and re-plan with me instead of pushing on
 - Complete, working implementations only — no placeholders; code must compile and tests must pass
-- Before done: "Would a staff engineer approve this?" Run tests, check logs, show evidence
-- Bugs: inspect logs, errors and failing tests and fix the root cause without hand-holding (`/debug`)
+- Before done: "Would a staff engineer approve this?" Run tests, check logs, show evidence; never mark anything done without proof
 
 ---
 
@@ -76,18 +75,18 @@ The main thread is the orchestrator and the dialogue with me: it holds decisions
 - Use `ni` (install), `nr` (run scripts), `nlx` (one-off exec) from antfu/ni — they auto-detect the package manager. `bunx` is fine for global tools
 - Never use `npm` or `npx`, even if a skill's text says so — substitute the equivalent above
 - Before a one-off exec (`nlx`/`bunx`), check package.json for an existing script
-- Always consult official documentation; assume your knowledge may be outdated
+- Always consult official documentation (context7 first, then the library's GitHub source and issues; `scout` for deeper research); assume your knowledge may be outdated
 - Nothing hardcoded that can be discovered: branches, remotes, channels, user ids, labels and schemas are looked up at run time
 - `$CLAUDE_CONFIG_DIR` is this workspace's config dir (`~/.claude` when unset). Skills, agents and scripts refer to it, never to a named config dir, so they stay portable across workspaces
 - Claude launch and resume commands I'm given are never bare `claude`: build them with `bun $CLAUDE_CONFIG_DIR/bin/launch.ts` (`resume <name>`, `start <prompt>`, `open <path>`). It uses my shell alias for this workspace with `-d` when one exists, else the full `CLAUDE_CONFIG_DIR=… claude --dangerously-skip-permissions` form. For a resume, give both lines it prints: the terminal one and the in-session one, `resume "<name>" · workspace: <ws> (<dir>)`
-- When I paste `resume "<name>" · workspace: <ws> (<dir>)`: if `<dir>` is this workspace, run `/brainstorm resume <name>` when it is an initiative under `state/work/`, else tell me `/resume "<name>"`. If `<dir>` is another workspace, look for it under `<dir>/state/work/` and `<dir>/projects/`, say whether it exists, and give me the terminal line from `bun $CLAUDE_CONFIG_DIR/bin/launch.ts --dir <dir> resume <name>`; never continue that workspace's work here
+- When I paste `resume "<name>" · workspace: <ws> (<dir>)`: if `<dir>` is this workspace and it is an initiative under `state/work/`, run `/pair implement <name>` when a PR's plan is approved or a PR is half built, `/pair plan <name>` when the next PR is ready to plan, else `/brainstorm resume <name>`; otherwise tell me `/resume "<name>"`. If `<dir>` is another workspace, look for it under `<dir>/state/work/` and `<dir>/projects/`, say whether it exists, and give me the terminal line from `bun $CLAUDE_CONFIG_DIR/bin/launch.ts --dir <dir> resume <name>`; never continue that workspace's work here
 
 ---
 
 ## Git & GitHub
 
 - Use `/branch` (script `br`) for branches, worktrees, pushes and stacks — don't hand-roll git recipes
-- Multi-PR work is a gh stack. Its lifecycle (build locally, rebase onto the target, push, draft PRs, sync, merge, cleanup) is in `/branch`. `gh stack merge <PR>` merges that layer and everything below it, so any layer can be the merge point and each layer must be self-contained
+- Multi-PR work is a gh stack. Its lifecycle (build one layer, rebase it on its parent, push, draft PR, then the next layer; sync, merge, cleanup) is in `/branch`. `gh stack merge <PR>` merges that layer and everything below it, so any layer can be the merge point and each layer must be self-contained
 - The default branch and the integration target always come from the remote (`br target`), never from a local `origin/HEAD`
 - Branches use a conventional prefix (`feature/`, `fix/`, `test/`, `docs/`, `poc/`, …); suggest a name with `br name` and let me confirm it
 - Push with `--no-verify` (the TypeScript pre-push hook runs out of memory) and never force-push without my explicit consent
@@ -134,7 +133,6 @@ If a sign-in or sign-up is needed, use `claude-in-chrome`. If any skill states a
 
 - Verify facts with sources or clear logic; don't blindly agree — verify first
 - When assumptions are wrong, explain why and how to fix, with precise corrections and examples
-- When asked for options, list pros/cons and a recommendation
 - When refactoring, explain intent before rewriting
 - No silent failures, no pushing forward through confusion, no "do what makes sense" ambiguity
 
@@ -143,9 +141,8 @@ If a sign-in or sign-up is needed, use `claude-in-chrome`. If any skill states a
 ## Skills & Agents
 
 Workflows (what I start):
-- `/brainstorm` — front door for non-trivial work: discuss, map, break down, roadmap; `resume <slug>`
+- Core (see How Work Flows): `/brainstorm` (`resume <slug>`), `/pair` (`plan <slug>`, `implement <slug>`, `status <slug>`), `/handoff`
 - `/spec` — requirements and grounded ACs in a local spec, optionally the Linear ticket or a GitHub issue; a longer `prd` spec for 5+ PR work
-- `/pair` — slice ladder, planned atomic commits, slice checkpoints (interactive coding)
 - `/ui` — UI design, critique and polish (impeccable, web-design-guidelines, Figma)
 - `/qa` — AC- and code-derived cases run in the browser; honest repros; lasting tests
 - `/debug` — evidence-driven root cause (wraps diagnosing-bugs)
@@ -154,6 +151,6 @@ Workflows (what I start):
 - `/ticket` (Linear, only when connected)
 - `/skills` (third-party skill updates, refine queue), `/skill-retro`
 
-Shared capabilities: `gather-context` (cited context bundles; repo conventions), `scout` (research briefs), `branch` (`br`), `handoff`, `thermo` (maintainability rubric), `explain` (PR intent vs spec, ticket or issue), `post-pr-comments` (posting review comments and replies), `/simplify`.
+Shared capabilities: `gather-context` (cited context bundles; repo conventions), `scout` (research briefs), `branch` (`br`), `thermo` (maintainability rubric), `explain` (PR intent vs spec, ticket or issue), `post-pr-comments` (posting review comments and replies), `/simplify`.
 
 Agents: `builder` (sonnet; one planned commit), `reviewer` (opus; structured findings), `tester` (opus; browser QA), `scout` (sonnet; research).
