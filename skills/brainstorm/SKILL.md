@@ -31,7 +31,7 @@ If the request is a question, a lookup, or a small fix, print one line such as `
 4. **Map.** In a few lines, name the skills and agents this problem needs (CLAUDE.md lists them with their roles).
 5. **Grill the ask.** Start from what the bundles found and what they left open. Follow the `grilling` skill's question format (numbered questions, each with your recommended answer), adding `domain-modeling` when the answers should become glossary or ADR docs. Ask at least one "why" to catch an XY problem. Lay out the options, the unknowns, and what to check first.
 6. **Cut the roadmap.** Apply the rules under "Cutting the roadmap" and discuss the cut with the user until it settles. Hand a sub-problem to its skill when it needs more depth than this chat should hold.
-7. **Present.** Run the self-grill in `references/self-grill.md` on the roadmap, show it in the template below with the Grilled block, and ask the user to approve or edit it. On approval, run "After approval".
+7. **Present.** Run the self-grill in `references/self-grill.md` on the roadmap, show it in the template below with the Grilled block and the ticket plan, and ask the user to approve or edit both. On approval, run "After approval".
 
 ## Cutting the roadmap
 
@@ -40,10 +40,11 @@ If the request is a question, a lookup, or a small fix, print one line such as `
 - **Ship order**: the first PR (or group) is the smallest thing that goes live on its own; each later PR builds on the ones before it. Building, rebasing, QA and opening the PR all happen inside each PR's own `pair` run, so every roadmap item is a PR that ships.
 - **Group**: PRs that must go live together but should stay reviewable separately. They form a stack whose top PR takes the whole group live (`merge_point: true`, as on every ungrouped PR); each one is still its own draft PR. Grouping is the user's call: propose it with the reason and log it.
 - **No code**: an investigation or a decision lists its deliverables (a write-up, a decision) in place of PRs and skips tickets or issues, ladder and stack.
+- **Ticket plan** (when Linear is connected): each PR either uses an existing ticket or gets a new one, and the plan names the parent. Find existing tickets in the context bundle's Linear findings; when the bundle has none for a PR, search Linear (`list_issues` by the PR's subject, at most 2 queries). A PR uses an existing ticket only when that ticket asks for the same deliverable; one that only overlaps is linked as related.
 
 ## After approval
 
-1. **Tickets or issues**, every write shown and approved first. When Linear is connected, through the `ticket` skill: more than one PR gets a parent (the ticket the work came from, when there is one) and one child per PR, with `blockedBy` in ship order; one PR gets one ticket. Otherwise, when the user wants them, one GitHub issue per PR (`gh issue create`), linked to the issue the work came from when there is one. Without either, no ids anywhere.
+1. **Tickets or issues**, every write shown and approved first. When Linear is connected, through the `ticket` skill, following the approved ticket plan (create only the new tickets and link the existing ones as the plan says): more than one PR gets a parent (the ticket the work came from, when there is one) and one child per PR, with `blockedBy` in ship order; one PR gets one ticket. Otherwise, when the user wants them, one GitHub issue per PR (`gh issue create`), linked to the issue the work came from when there is one. Without either, no ids anywhere.
 2. **Branch names**: `br name` for each PR (`--ticket` when it has a Linear ticket), each confirmed by the user.
 3. **Ladder**: write the PR list as JSON in the initiative directory, shaped per `$CLAUDE_CONFIG_DIR/skills/pair/references/ladder.md`, then run `bun $CLAUDE_CONFIG_DIR/skills/pair/scripts/pair.ts plan save <file>`. One slice per PR in ship order with `title`, `goal`, `after`, `branch`, `ticket` (optional: a Linear key or an issue number such as `#412`), `acs`, `merge_point`, `milestone`, `est_days`, and `commits` holding only `n`, `title` and `why`. `acs` are `AC-<n>` from the spec, or `<TICKET>/AC-<n>` from a Linear ticket; when none are written yet, run `spec` first.
 4. **Roadmap**: write the same PR list into `roadmap.md` at the path `work.ts current` prints. It is the tracker everyone reads: `pair` keeps each PR's status and the "Next up" line current, and `handoff` and `work.ts` read them.
@@ -87,6 +88,7 @@ Context: `<context bundle path>`, conventions: `<conventions bundle path>`.
 ## Milestone 1: <what users can do when it is done>
 
 **PR 1: <short name>** (<status: next | not started | plan approved | in progress, k of n commits | draft #NNNN | live>)
+Ticket: <AI-123 (existing) | new>. (Omit without Linear.)
 <1 to 3 sentences: what users can do after it goes live. Say when it cannot go live alone and which PR takes it live.>
 Rough plan: <the rough commits in plain words, one short phrase each, separated by semicolons>.
 
