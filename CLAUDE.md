@@ -153,4 +153,4 @@ Workflows (what I start):
 
 Shared capabilities: `gather-context` (cited context bundles; repo conventions), `scout` (research briefs), `branch` (`br`), `thermo` (maintainability rubric), `explain` (PR intent vs spec, ticket or issue), `post-pr-comments` (posting review comments and replies), `/simplify`.
 
-Agents: `builder` (sonnet; one planned commit), `reviewer` (opus; structured findings), `tester` (opus; browser QA), `scout` (sonnet; research).
+Agents: `builder` (sonnet; one planned commit), `reviewer` (opus; structured findings), `tester` (opus; browser QA), `scout` (sonnet; research), `plan-griller` and `plan-annotator` (opus at high effort; fresh-context grill and per-commit notes in the pair plan gate).

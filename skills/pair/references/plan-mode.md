@@ -8,7 +8,7 @@ Gather them through read-only agents so the main thread stays free:
 
 - The PR's ladder entry (`pair plan show --json`): goal, "after this you can", ACs, rough commits, branch, ticket or issue, budget.
 - The AC text: `bun $CLAUDE_CONFIG_DIR/skills/spec/scripts/spec.ts acs <slug> --json` for `AC-<n>`, the `ticket` skill in read mode for `<TICKET>/AC-<n>` on a Linear ticket.
-- The repo's conventions through `gather-context` in conventions mode: the patterns to follow with `file:line`, and the check commands.
+- The context bundles brainstorm gathered under `<initiative dir>/context/` (`work.ts current` prints the directory): the source bundle with its code map, and `conventions.md` with the patterns to follow and the check commands. When there are none (a roadmap from before brainstorm gathered context), run `gather-context` the way brainstorm's Gather context step does, before planning.
 - The code the PR touches, read deeply enough to write real snippets of each change.
 - For a library decision: its docs (context7) and its GitHub source and issues, through an agent, before proposing anything.
 
@@ -18,10 +18,14 @@ Plan mode is read-only: exploring, agents and the plan file only. Every state wr
 
 1. Call EnterPlanMode. If the user declines it, write the same plan into the chat and treat their explicit OK as the approval.
 2. Gather the inputs above.
-3. Write the plan file from the template below. Run the self-grill in `$CLAUDE_CONFIG_DIR/skills/brainstorm/references/self-grill.md` on it and fix what it finds; whatever stays unresolved goes under Open questions.
-4. Settle decisions in chat, as options in prose with a recommendation. A question from the user gets an answer-only turn: no plan file edit and no ExitPlanMode in that turn.
-5. Call ExitPlanMode once every open question is answered, or parked with the user's agreement.
-6. Rejected with feedback: apply the edits to the same plan file and call ExitPlanMode again. Feedback that means "approved, build it later or in a new chat" is an approval: run the steps below with build later.
+3. Write the plan file from the template below.
+4. **Grill.** Dispatch the `plan-griller` agent with the plan path, the repo path and branch, the ACs and the context directory. Apply each finding's `fix` to the plan, and turn each `ask` into an Open question with its options and recommendation. Put its Grilled block under Grilled in the plan, with one line saying what the grill changed. Done when every finding is applied or is an Open question.
+5. **Annotate.** Once the grill's fixes are in, dispatch the `plan-annotator` agent with the same inputs. Render each commit's notes under that commit as its Notes block, word for word, and the plan-level notes under Notes on the whole plan; each flag becomes an Open question. The plan text stays exactly as the grill left it: annotation only adds.
+6. Settle decisions in chat, as options in prose with a recommendation. A question from the user gets an answer-only turn: no plan file edit and no ExitPlanMode in that turn.
+7. Call ExitPlanMode once every open question is answered, or parked with the user's agreement.
+8. Rejected with feedback: apply the edits to the same plan file, run steps 4 and 5 again on the changed plan, and call ExitPlanMode again. Feedback that means "approved, build it later or in a new chat" is an approval: run the steps below with build later.
+
+The grill and the annotation each run in their own fresh agent, one after the other and never in parallel, so each reads the plan cold and the annotator reads the plan the grill left. Every gate runs them, the re-plan gate included.
 
 The gate is done when ExitPlanMode returns approved (or the user approved to build later). The approval prompt may offer to clear the context before building; that works too, since the saved plan carries over.
 
@@ -60,6 +64,16 @@ Files: <path>, <path>
 Tests: <the tests it adds or changes, and what each one proves>
 Check: `<command>`
 
+> **Notes**
+> Before: <what the code does today, file:line>
+> Why: <the reason, with the AC it serves>
+> Change: <what the commit does>
+> Expect: <what behaves differently once it lands>
+> Test for: <states, edge cases, what a regression looks like>
+> Blast radius: <other users of the touched code, file:line>
+> Unverified: <claims the annotator could not confirm, and how to check>
+> <The extras for the commit's type, one line each: AC for a feat; Root cause, Cause or symptom, Repro for a fix; Parity (and Breaking for an upgrade) for a refactor or perf; Locks, Would fail for a test; Affects, Rollback for a chore>
+
 ### 2. ...
 
 ## How you can check it yourself
@@ -67,6 +81,12 @@ Check: `<command>`
 
 ## What goes in the PR
 <One or two sentences: what the description says, which screenshots or video.>
+
+## Notes on the whole plan
+<From the annotator: ACs no commit serves, decisions the plan makes without saying so, ordering risks between commits. Omit a line that is empty.>
+
+## Grilled
+<The plan-griller's Grilled block, and one line on what it changed.>
 
 ## Exceptions to the repo's conventions
 <Only when there are any: what and why, for the user to approve.>

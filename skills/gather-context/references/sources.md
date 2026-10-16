@@ -91,3 +91,13 @@ Tools: `resolve_object`, `list_recent_objects`, `summarize_experiment`, `sql_que
 - Gate: the focus is an incident or topic about an agent, prompt, model, or eval, or the PR touches AI code (prompts, agents, workflows, evals, tracing, model ids, `generateText`/`streamText`, Mastra, CopilotKit).
 - Looking for the baseline a change tries to beat, or the production failure mode it fixes: failing spans, score changes, error rates, with permalinks.
 - Caps: at most 3 calls. Never write datasets, prompts, scorers, or automations.
+
+## Code (sonnet)
+
+Tools: Read, Grep, Glob, and read-only `git` (`git grep`, `git log`, `git blame`, `git ls-files`). Never run builds, tests, installs or scripts, and never read `.env` files.
+
+- Gate: the focus is a change to the current repo (a feature to build, a bug to fix, a PR or incident to trace into the code). Skip it when the focus carries no repo work.
+- Seed the search from the identifiers and the ask: symbols, file names, routes, UI copy, error messages, stack frames.
+- Map the area the change lands in: the entry points it starts from (route, page, component, procedure, job), the path the behaviour runs through, the callers of anything likely to change (the blast radius), existing helpers, components or patterns that already do part of it (reuse), and the tests that cover it today.
+- Caps: at most 10 searches and 15 file reads. Stop at the edge of the change; the map covers the area the work touches, never the whole app.
+- Write `code.md` in the template's format with `## Entry points`, `## Path`, `## Callers`, `## Reuse` and `## Tests` in place of `## Items`. Each item is `<file:line> · <one line: what it is and why it matters>`; the `file:line` is its link.

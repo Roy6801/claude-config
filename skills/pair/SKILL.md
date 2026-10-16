@@ -68,7 +68,7 @@ The script holds each chat to one PR through `CLAUDE_CODE_SESSION_ID`: the chat 
 
 ## Plan
 
-Run the plan gate in `references/plan-mode.md` for this PR only. The plan is elaborate: every commit carries its plain explanation, files, real snippets, tests and check. On approval, save the plan before any code edit, so a chat that dies mid-build resumes with `/pair implement <slug>`. Then build in this chat, unless the user said to build later: then write no code and ask the build-later handoff question below.
+Run the plan gate in `references/plan-mode.md` for this PR only. The plan is elaborate: every commit carries its plain explanation, files, real snippets, tests and check. Before the user sees it, the `plan-griller` agent grills it and then the `plan-annotator` agent adds notes under each commit, each in its own fresh context. On approval, save the plan before any code edit, so a chat that dies mid-build resumes with `/pair implement <slug>`. Then build in this chat, unless the user said to build later: then write no code and ask the build-later handoff question below.
 
 ## Build
 

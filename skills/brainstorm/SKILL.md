@@ -26,10 +26,12 @@ If the request is a question, a lookup, or a small fix, print one line such as `
 ## Full flow
 
 1. **Listen.** Let the user narrate. Take only a quick look at what they point to (a ticket or issue, thread, PR, or error message). Run `work.ts list` and match the PR number, ticket key, issue number, or topic against existing slugs and titles; on a match, switch to Resume.
-2. **Map.** In a few lines, name the skills and agents this problem needs (CLAUDE.md lists them with their roles).
-3. **Grill the ask.** Follow the `grilling` skill's question format (numbered questions, each with your recommended answer), adding `domain-modeling` when the answers should become glossary or ADR docs. Ask at least one "why" to catch an XY problem. Lay out the options, the unknowns, and what to check first.
-4. **Cut the roadmap.** Apply the rules under "Cutting the roadmap" and discuss the cut with the user until it settles. Hand a sub-problem to its skill when it needs more depth than this chat should hold.
-5. **Present.** Run the self-grill in `references/self-grill.md` on the roadmap, show it in the template below with the Grilled block, and ask the user to approve or edit it. On approval, run "After approval".
+2. **Start the initiative.** `work.ts new <slug> --title "<title>"`, so the context bundle and every decision land in its directory from here on.
+3. **Gather context.** Run the `gather-context` skill in the mode that fits what the user pointed to (`ticket`, `pr`, `incident`, or `topic` with the user's own words when they pointed to nothing), then again in `conventions` mode. The step is done when both bundles exist under `<initiative dir>/context/` and you have read their Summary, Code map and Open questions.
+4. **Map.** In a few lines, name the skills and agents this problem needs (CLAUDE.md lists them with their roles).
+5. **Grill the ask.** Start from what the bundles found and what they left open. Follow the `grilling` skill's question format (numbered questions, each with your recommended answer), adding `domain-modeling` when the answers should become glossary or ADR docs. Ask at least one "why" to catch an XY problem. Lay out the options, the unknowns, and what to check first.
+6. **Cut the roadmap.** Apply the rules under "Cutting the roadmap" and discuss the cut with the user until it settles. Hand a sub-problem to its skill when it needs more depth than this chat should hold.
+7. **Present.** Run the self-grill in `references/self-grill.md` on the roadmap, show it in the template below with the Grilled block, and ask the user to approve or edit it. On approval, run "After approval".
 
 ## Cutting the roadmap
 
@@ -41,14 +43,13 @@ If the request is a question, a lookup, or a small fix, print one line such as `
 
 ## After approval
 
-1. `work.ts new <slug> --title "<title>"`, or `work.ts use <slug>` when it exists.
-2. **Tickets or issues**, every write shown and approved first. When Linear is connected, through the `ticket` skill: more than one PR gets a parent (the ticket the work came from, when there is one) and one child per PR, with `blockedBy` in ship order; one PR gets one ticket. Otherwise, when the user wants them, one GitHub issue per PR (`gh issue create`), linked to the issue the work came from when there is one. Without either, no ids anywhere.
-3. **Branch names**: `br name` for each PR (`--ticket` when it has a Linear ticket), each confirmed by the user.
-4. **Ladder**: write the PR list as JSON in the initiative directory, shaped per `$CLAUDE_CONFIG_DIR/skills/pair/references/ladder.md`, then run `bun $CLAUDE_CONFIG_DIR/skills/pair/scripts/pair.ts plan save <file>`. One slice per PR in ship order with `title`, `goal`, `after`, `branch`, `ticket` (optional: a Linear key or an issue number such as `#412`), `acs`, `merge_point`, `milestone`, `est_days`, and `commits` holding only `n`, `title` and `why`. `acs` are `AC-<n>` from the spec, or `<TICKET>/AC-<n>` from a Linear ticket; when none are written yet, run `spec` first.
-5. **Roadmap**: write the same PR list into `roadmap.md` at the path `work.ts current` prints. It is the tracker everyone reads: `pair` keeps each PR's status and the "Next up" line current, and `handoff` and `work.ts` read them.
-6. **Stack**: with more than one PR, set it up through the `branch` skill (`br stack`, dry run shown and approved first). The open-PR cap is optional: when the user wants draft PRs opened now (`--draft-prs`), pass `--cap <n>` only when they set one (`br` falls back to 5, so pass a number above the PR count when they want none).
-7. Log the decisions from the discussion that are not yet in `decisions.md`.
-8. End with one yes/no question: "Hand off to a fresh chat for PR 1, <name>?" On yes, run the `handoff` skill (its starter is `/pair plan <slug>`). On no, stop.
+1. **Tickets or issues**, every write shown and approved first. When Linear is connected, through the `ticket` skill: more than one PR gets a parent (the ticket the work came from, when there is one) and one child per PR, with `blockedBy` in ship order; one PR gets one ticket. Otherwise, when the user wants them, one GitHub issue per PR (`gh issue create`), linked to the issue the work came from when there is one. Without either, no ids anywhere.
+2. **Branch names**: `br name` for each PR (`--ticket` when it has a Linear ticket), each confirmed by the user.
+3. **Ladder**: write the PR list as JSON in the initiative directory, shaped per `$CLAUDE_CONFIG_DIR/skills/pair/references/ladder.md`, then run `bun $CLAUDE_CONFIG_DIR/skills/pair/scripts/pair.ts plan save <file>`. One slice per PR in ship order with `title`, `goal`, `after`, `branch`, `ticket` (optional: a Linear key or an issue number such as `#412`), `acs`, `merge_point`, `milestone`, `est_days`, and `commits` holding only `n`, `title` and `why`. `acs` are `AC-<n>` from the spec, or `<TICKET>/AC-<n>` from a Linear ticket; when none are written yet, run `spec` first.
+4. **Roadmap**: write the same PR list into `roadmap.md` at the path `work.ts current` prints. It is the tracker everyone reads: `pair` keeps each PR's status and the "Next up" line current, and `handoff` and `work.ts` read them.
+5. **Stack**: with more than one PR, set it up through the `branch` skill (`br stack`, dry run shown and approved first). The open-PR cap is optional: when the user wants draft PRs opened now (`--draft-prs`), pass `--cap <n>` only when they set one (`br` falls back to 5, so pass a number above the PR count when they want none).
+6. Log the decisions from the discussion that are not yet in `decisions.md`.
+7. End with one yes/no question: "Hand off to a fresh chat for PR 1, <name>?" On yes, run the `handoff` skill (its starter is `/pair plan <slug>`). On no, stop.
 
 ## Resume (`/brainstorm resume [slug]`)
 
@@ -80,6 +81,8 @@ Write for a reader who skims: plain sentences, one short section per PR, the nex
 <2 to 4 plain sentences: who is waiting, what they cannot do today, what changes.>
 
 Tracked in Linear under <parent>, or in GitHub issues. Each PR below has its own ticket or issue. (Omit without them.)
+
+Context: `<context bundle path>`, conventions: `<conventions bundle path>`.
 
 ## Milestone 1: <what users can do when it is done>
 
