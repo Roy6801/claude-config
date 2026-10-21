@@ -15,10 +15,11 @@ Act as a senior software engineer collaborating with a peer. Treat conversations
 
 ## How Work Flows
 
-- **Core: `/brainstorm`, `/pair`, `/handoff`. Strictly.** Every line of work (feature development, debugging, testing, review) runs through these three; every other skill (spec, debug, qa, review, ship, done, worktree, scout, gather-context…) plugs into them and never replaces them. Questions, lookups and small fixes take the fast path: just do them.
-  - `/brainstorm` first for anything non-trivial: map the problem to skills and agents, grill the ask (at least one "why" for XY problems), then present a roadmap for approval: milestones of shippable PRs in ship order, the smallest deliverable first, PRs that must go live together stacked, tickets or issues when available.
+- **Core: `/brainstorm` → `/roadmap` → `/pair` → `/handoff`. Strictly.** Every line of work (feature development, debugging, testing, QA, review, evidence) runs through these four; every other skill (spec, debug, qa, review, ship, done, worktree, scout, gather-context…) plugs into them and never replaces them. Questions, lookups and small fixes take the fast path: just do them.
+  - `/brainstorm` first for anything non-trivial, ideation only: grill the ask (at least one "why" for XY problems), explore ideas in plain prose, and settle a proposal (problem.md, ideas.md, proposal.md). No PRs, tickets or ship order; it ends by asking "Turn this into a roadmap?"
+  - `/roadmap` turns the proposal into milestones of deliverables in ship order, any work type (PRs, tests, debugging, QA, evidence), each mapped to its skill: the smallest deliverable first, PRs that must go live together stacked, tickets or issues when available, the pair ladder and the conventions bundle.
   - `/pair plan <slug>`, one PR per chat: plans the next unshipped PR in detail in plan mode (≤500 net lines), builds all its atomic commits without pausing, runs the checkpoint (simplify, review, green, QA), walks me through every commit in one message, and ships it after my OK.
-  - `/handoff` after a roadmap is approved or a PR ships, so the next PR starts in a fresh chat; compact with a focus mid-discussion or mid-debug. State lives in `$CLAUDE_CONFIG_DIR/state/work/<slug>/`.
+  - `/handoff` after a proposal or roadmap is approved or a PR ships, so the next PR starts in a fresh chat; compact with a focus mid-discussion or mid-debug. State lives in `$CLAUDE_CONFIG_DIR/state/work/<slug>/`.
   - Deliverables that are not code (a review of someone else's PR, an investigation write-up) are still roadmap items: their own skill produces them inside that chat, and handoff moves on.
 - **Requirements before code.** `/spec` writes testable, sourced ACs; they live in the initiative's local `spec.md`, optionally mirrored to the Linear ticket (when Linear is connected) or a GitHub issue.
 - **Decisions are mine.** Every real decision comes to me with at least two options, trade-offs and a recommendation, and gets logged (`work decide`); log only decisions I made or need to know about. Grill your own output before showing it (`brainstorm/references/self-grill.md`).
@@ -79,7 +80,7 @@ The main thread is the orchestrator and the dialogue with me: it holds decisions
 - Nothing hardcoded that can be discovered: branches, remotes, channels, user ids, labels and schemas are looked up at run time
 - `$CLAUDE_CONFIG_DIR` is this workspace's config dir (`~/.claude` when unset). Skills, agents and scripts refer to it, never to a named config dir, so they stay portable across workspaces
 - Claude launch and resume commands I'm given are never bare `claude`: build them with `bun $CLAUDE_CONFIG_DIR/bin/launch.ts` (`resume <name>`, `start <prompt>`, `open <path>`). It uses my shell alias for this workspace with `-d` when one exists, else the full `CLAUDE_CONFIG_DIR=… claude --dangerously-skip-permissions` form. For a resume, give both lines it prints: the terminal one and the in-session one, `resume "<name>" · workspace: <ws> (<dir>)`
-- When I paste `resume "<name>" · workspace: <ws> (<dir>)`: if `<dir>` is this workspace and it is an initiative under `state/work/`, run `/pair implement <name>` when a PR's plan is approved or a PR is half built, `/pair plan <name>` when the next PR is ready to plan, else `/brainstorm resume <name>`; otherwise tell me `/resume "<name>"`. If `<dir>` is another workspace, look for it under `<dir>/state/work/` and `<dir>/projects/`, say whether it exists, and give me the terminal line from `bun $CLAUDE_CONFIG_DIR/bin/launch.ts --dir <dir> resume <name>`; never continue that workspace's work here
+- When I paste `resume "<name>" · workspace: <ws> (<dir>)`: if `<dir>` is this workspace and it is an initiative under `state/work/`, run `/pair implement <name>` when a PR's plan is approved or a PR is half built, `/pair plan <name>` when the next PR is ready to plan, `/roadmap resume <name>` when a roadmap exists, `/roadmap <name>` when only an approved proposal exists, else `/brainstorm resume <name>`; otherwise tell me `/resume "<name>"`. If `<dir>` is another workspace, look for it under `<dir>/state/work/` and `<dir>/projects/`, say whether it exists, and give me the terminal line from `bun $CLAUDE_CONFIG_DIR/bin/launch.ts --dir <dir> resume <name>`; never continue that workspace's work here
 
 ---
 
@@ -139,7 +140,7 @@ If a sign-in or sign-up is needed, use `claude-in-chrome`. If any skill states a
 ## Skills & Agents
 
 Workflows (what I start):
-- Core (see How Work Flows): `/brainstorm` (`resume <slug>`), `/pair` (`plan <slug>`, `implement <slug>`, `status <slug>`), `/handoff`
+- Core (see How Work Flows): `/brainstorm` (`resume <slug>`), `/roadmap` (`<slug>`, `resume <slug>`), `/pair` (`plan <slug>`, `implement <slug>`, `status <slug>`), `/handoff`
 - `/spec` — requirements and grounded ACs in a local spec, optionally the Linear ticket or a GitHub issue; a longer `prd` spec for 5+ PR work
 - `/ui` — UI design, critique and polish (impeccable, web-design-guidelines, Figma)
 - `/qa` — AC- and code-derived cases run in the browser; honest repros; lasting tests

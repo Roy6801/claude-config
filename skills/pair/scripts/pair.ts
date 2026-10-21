@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // PR ladder for the pair skill: state/work/<slug>/pair.json (never in the repo or .git). Each slice is one PR.
-// Validates and stores the ladder (rough from brainstorm, detailed per PR once its plan is approved), routes
+// Validates and stores the ladder (rough from roadmap, detailed per PR once its plan is approved), routes
 // /pair to the right step, holds one PR per chat (CLAUDE_CODE_SESSION_ID), checks the working tree against the
 // planned commit, commits what is staged with a reasoning message, verifies every commit passes its check,
 // prints the walkthrough and records the shipped PR. Deterministic file and git ops only.
@@ -284,7 +284,7 @@ const DONE_LINE = "**Next up: nothing; every PR is live. This roadmap is done.**
 const DONE_RE = /^\*\*Next up: nothing; every PR is live\. This roadmap is done\.\*\*$/;
 
 // Rewrites only the status parts of roadmap.md: each "**PR <n>: <name>** (<status>)" heading and the
-// "**Next up: …**" line. Everything else stays as brainstorm wrote it.
+// "**Next up: …**" line. Everything else stays as the roadmap skill wrote it.
 export function syncRoadmap(md: string, p: Pair): { md: string; changed: string[]; problems: string[] } {
   const changed: string[] = [];
   const problems: string[] = [];
@@ -540,7 +540,7 @@ export function matchSlices(old: Slice[], next: { branch?: unknown; title?: unkn
 }
 
 // Fills a raw replacement ladder from the stored one before validation: progress (status, timestamps, PR,
-// chats), the slice fields the new file leaves out (a rough brainstorm re-save keeps the approved details),
+// chats), the slice fields the new file leaves out (a rough roadmap re-save keeps the approved details),
 // and per commit (matched by title inside the matched slice) its details and done markers. Extra commits
 // that the new file does not list are appended.
 export function carryOver(old: Pair | null, raw: unknown): unknown {
@@ -851,18 +851,18 @@ function readPair(file: string): Pair {
 
 async function load(args: Args) {
   const init = await initiative(args);
-  if (!existsSync(init.file)) throw new UserError(`no ladder for ${init.slug} yet (brainstorm saves it with pair plan save <file>)`);
+  if (!existsSync(init.file)) throw new UserError(`no ladder for ${init.slug} yet (roadmap saves it with pair plan save <file>)`);
   return { ...init, pair: readPair(init.file) };
 }
 
 const save = (file: string, pair: Pair) => writeAtomic(file, JSON.stringify(pair, null, 2) + "\n");
 
 // Keeps roadmap.md's status parts in line with the ladder after every transition. Without a roadmap
-// (brainstorm writes it after the first ladder save) only the explicit command complains.
+// (roadmap writes it after the first ladder save) only the explicit command complains.
 function syncRoadmapFile(dir: string, pair: Pair, explicit = false) {
   const file = join(dir, "roadmap.md");
   if (!existsSync(file)) {
-    if (explicit) throw new UserError(`no roadmap at ${file} (brainstorm writes it)`);
+    if (explicit) throw new UserError(`no roadmap at ${file} (roadmap writes it)`);
     return { file: null, changed: [] as string[], problems: [] as string[] };
   }
   const md = readFileSync(file, "utf8");
@@ -995,7 +995,7 @@ async function cmdPlanSave(args: Args) {
   if (planMd && n === undefined) throw new UserError("--plan goes with --slice <n> (one PR's approved plan)");
   let sid: string | null = null;
   if (n !== undefined) {
-    if (!old) throw new UserError(`no ladder for ${init.slug} yet; brainstorm saves the whole ladder first`);
+    if (!old) throw new UserError(`no ladder for ${init.slug} yet; roadmap saves the whole ladder first`);
     if (!isObj(raw) || "slices" in raw) throw new UserError("--slice takes one PR's JSON object (its slice), not the whole ladder");
     if (!planMd) throw new UserError("--plan <plan.md> is required with --slice: the readable plan the user approved");
     if (!existsSync(resolve(planMd)) || !readFileSync(resolve(planMd), "utf8").trim()) throw new UserError(`plan file ${planMd} is missing or empty`);
@@ -1618,7 +1618,7 @@ async function cmdRoadmaps(args: Args) {
 }
 
 const USAGE = `usage: pair <command> [--slug <slug>] [--json]   (default slug: work current for the cwd)
-  plan save <file.json>            validate and store the whole ladder (brainstorm); writes pair.json
+  plan save <file.json>            validate and store the whole ladder (roadmap); writes pair.json
   plan save <slice.json> --slice <n> --plan <plan.md>
                                    store PR n's approved plan: detailed commits, the plan file (pr-<n>-plan.md), approval
   plan show                        ladder by milestone, state of each PR, timeline vs deadline, AC coverage

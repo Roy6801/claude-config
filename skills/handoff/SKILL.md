@@ -1,9 +1,9 @@
 ---
 name: handoff
 description: |
-  Reset context without losing the thread. Decides between handing off to a fresh session and compacting in place, makes sure the decision log is current, writes a short handoff note under $CLAUDE_CONFIG_DIR/state/work/<slug>/, and copies the skill command to start with (`/pair plan <slug>`, `/pair implement <slug>`, `/brainstorm resume <slug>` or `/compact <focus>`) to the clipboard; the terminal launch line and the in-session line are shown in chat.
+  Reset context without losing the thread. Decides between handing off to a fresh session and compacting in place, makes sure the decision log is current, writes a short handoff note under $CLAUDE_CONFIG_DIR/state/work/<slug>/, and copies the skill command to start with (`/pair plan <slug>`, `/pair implement <slug>`, `/roadmap <slug>`, `/roadmap resume <slug>`, `/brainstorm resume <slug>` or `/compact <focus>`) to the clipboard; the terminal launch line and the in-session line are shown in chat.
 
-  Use when: a roadmap was just approved, a PR plan was approved to build in a fresh chat, a PR is half built, a PR shipped and the next one starts, the context is long mid-discussion or mid-debug, or the user says "hand off", "fresh session", "compact", "context is getting long". Also invoked by brainstorm after roadmap approval.
+  Use when: a roadmap was just approved, a PR plan was approved to build in a fresh chat, a PR is half built, a PR shipped and the next one starts, the context is long mid-discussion or mid-debug, or the user says "hand off", "fresh session", "compact", "context is getting long". Also invoked by brainstorm when the context is long before the roadmap, and by roadmap after approval.
 user-invocable: true
 metadata:
   origin: local
@@ -23,7 +23,8 @@ Run `bun $CLAUDE_CONFIG_DIR/bin/work.ts current`. If nothing is active and the w
 
 First decide what is being carried. The roadmap is the tracker: read `roadmap.md` (its "Next up" line and each PR's status) and offer the carry-over that matches; the user confirms or picks another:
 
-- **Brainstorm**: the roadmap discussion is unfinished, or the roadmap needs regrouping. Starter: `/brainstorm resume <slug>`.
+- **Brainstorm**: the ideation is unfinished (no approved `proposal.md`). Starter: `/brainstorm resume <slug>`.
+- **Roadmap**: the proposal is approved but no roadmap is cut yet (starter `/roadmap <slug>`), or the roadmap discussion is unfinished or needs regrouping (starter `/roadmap resume <slug>`).
 - **Pair plan**: a PR's plan is approved but nothing is built. Starter: `/pair implement <slug>`. The note points to the plan file pair saved (`pr-<n>-plan.md` in the initiative directory); it never copies it.
 - **Pair implementation**: a PR is half built, or shipped with fixes still open. Starter: `/pair implement <slug>`, which continues that same PR from its plan file.
 - **Next PR**: the last PR shipped and the next one is ready to plan. Starter: `/pair plan <slug>`.
@@ -81,7 +82,7 @@ Use pointers, not pasted content: list paths and line ranges instead of copying 
 bun $CLAUDE_CONFIG_DIR/bin/work.ts handoff - --file <path-to-draft.md>
 ```
 
-This archives the previous `handoff.md`, writes the new one, and copies the skill command (default `/brainstorm resume <slug>`) to the clipboard. It also prints two alternatives to show in chat, not copied: the terminal line `<launch> "<command>"`, where `<launch>` comes from `bin/launch.ts` (the user's alias for this workspace with `-d`, or the full `CLAUDE_CONFIG_DIR=… claude --dangerously-skip-permissions` command when no alias exists), and the in-session line `resume "<slug>" · workspace: <ws> (<dir>)`. For work with a roadmap and pair ladder, pass `--resume "/pair plan <slug>"` (or `--resume "/pair implement <slug>"` when a PR's plan is approved or it is half built) so the starter opens a fresh chat on that PR, never `/brainstorm resume`. Other skills that own the next step pass their own `--resume "<slash command>"`.
+This archives the previous `handoff.md`, writes the new one, and copies the skill command (default `/roadmap resume <slug>` when `roadmap.md` exists, else `/brainstorm resume <slug>`) to the clipboard. It also prints two alternatives to show in chat, not copied: the terminal line `<launch> "<command>"`, where `<launch>` comes from `bin/launch.ts` (the user's alias for this workspace with `-d`, or the full `CLAUDE_CONFIG_DIR=… claude --dangerously-skip-permissions` command when no alias exists), and the in-session line `resume "<slug>" · workspace: <ws> (<dir>)`. For work with a roadmap and pair ladder, pass `--resume "/pair plan <slug>"` (or `--resume "/pair implement <slug>"` when a PR's plan is approved or it is half built) so the starter opens a fresh chat on that PR, never `/roadmap resume`. Other skills that own the next step pass their own `--resume "<slash command>"`.
 
 Tell the user exactly as printed: "Copied `<command>`. Paste it in a fresh chat." Then, on their own lines, the alternatives: "From a terminal: `<terminal line>`" and "In an open session: `<in-session line>`".
 

@@ -24,7 +24,7 @@
 
 ## Workflow
 
-`/brainstorm` → `/spec` → `/pair` (slices, planned commits, checkpoints) → `/ship` → `/done`, with `/ui`, `/qa`, `/debug`, `/scout`, `/review`, `/ticket` (Linear, when connected) and `/handoff` along the way. The full catalog is at the end of `CLAUDE.md`.
+`/brainstorm` (ideation) → `/roadmap` → `/spec` → `/pair` (slices, planned commits, checkpoints) → `/ship` → `/done`, with `/ui`, `/qa`, `/debug`, `/scout`, `/review`, `/ticket` (Linear, when connected) and `/handoff` along the way. The full catalog is at the end of `CLAUDE.md`.
 
 ## Upstream skills
 

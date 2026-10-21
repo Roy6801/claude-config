@@ -8,7 +8,7 @@ Gather them through read-only agents so the main thread stays free:
 
 - The PR's ladder entry (`pair plan show --json`): goal, "after this you can", ACs, rough commits, branch, ticket or issue, budget.
 - The AC text: `bun $CLAUDE_CONFIG_DIR/skills/spec/scripts/spec.ts acs <slug> --json` for `AC-<n>`, the `ticket` skill in read mode for `<TICKET>/AC-<n>` on a Linear ticket.
-- The context bundles brainstorm gathered under `<initiative dir>/context/` (`work.ts current` prints the directory): the source bundle with its code map, and `conventions.md` with the patterns to follow and the check commands. When there are none (a roadmap from before brainstorm gathered context), run `gather-context` the way brainstorm's Gather context step does, before planning.
+- The context bundles brainstorm and roadmap gathered under `<initiative dir>/context/` (`work.ts current` prints the directory): the source bundle with its code map, and `conventions.md` with the patterns to follow and the check commands. When there are none (a roadmap from before they gathered context), run `gather-context` the way brainstorm's Gather context and roadmap's Gather conventions steps do, before planning.
 - The code the PR touches, read deeply enough to write real snippets of each change.
 - For a library decision: its docs (context7) and its GitHub source and issues, through an agent, before proposing anything.
 

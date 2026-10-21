@@ -1,7 +1,7 @@
 ---
 name: pair
 description: |
-  One PR per chat from a brainstorm roadmap. Plans the next unshipped PR in plan mode (an elaborate plan: every commit's change, files, snippets, tests and check), builds it as planned atomic commits through the `builder` agent without pausing, runs the checkpoint (simplify, review, green on every commit, QA per AC), walks the user through every commit in one message, ships the draft PR with `/ship`, keeps roadmap.md current, and offers the handoff to the next PR. The ladder lives in pair.json in the initiative directory, never in the repo.
+  One PR per chat from a `roadmap`. Plans the next unshipped PR in plan mode (an elaborate plan: every commit's change, files, snippets, tests and check), builds it as planned atomic commits through the `builder` agent without pausing, runs the checkpoint (simplify, review, green on every commit, QA per AC), walks the user through every commit in one message, ships the draft PR with `/ship`, keeps roadmap.md current, and offers the handoff to the next PR. The ladder lives in pair.json in the initiative directory, never in the repo.
 
   Use when: `/pair plan <slug> [<n>]`, `/pair implement <slug>`, `/pair status <slug>`, or a handoff starter names one; the user asks to "build the next PR", "continue the PR", "build the approved plan", "where are we on the roadmap"; or review comments, CI failures or test findings arrive for the PR this chat shipped.
 user-invocable: true
@@ -35,7 +35,7 @@ Each chat takes one PR of the roadmap from plan to draft PR: plan, build, checkp
 | `pair status` | Every PR's state, this chat's PR, the current PR's commits, size and time |
 | `pair plan show` | The ladder by milestone, timeline against the deadline, AC coverage |
 | `pair plan save <slice.json> --slice <n> --plan <plan.md>` | Store an approved PR plan (see `references/plan-mode.md`) |
-| `pair plan save <ladder.json>` | Store a whole ladder (brainstorm's job; pair uses it only when the user changes the roadmap here) |
+| `pair plan save <ladder.json>` | Store a whole ladder (the roadmap skill's job; pair uses it only when the user changes the roadmap here) |
 | `pair slice start <n>` | This chat takes PR n; prints the `git switch` command for its branch |
 | `pair check` / `pair commit …` | Gate and record each commit (`references/commits.md`) |
 | `pair green` / `pair walk` | Every commit passes its check; the walkthrough source (`references/checkpoint.md`) |

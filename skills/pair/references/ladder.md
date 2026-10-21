@@ -4,7 +4,7 @@ The ladder is the machine record of a roadmap: `pair.json` in the initiative dir
 
 ## Saving
 
-- `pair plan save <ladder.json>` stores a whole ladder (brainstorm, or a roadmap change).
+- `pair plan save <ladder.json>` stores a whole ladder (the roadmap skill, or a roadmap change).
 - `pair plan save <slice.json> --slice <n> --plan <plan.md>` stores one PR's approved plan: the file holds that one slice object (only the fields that change are needed; the rest come from the stored slice), the script copies the plan to `pr-<n>-plan.md`, sets `plan_file` and `plan_approved_at`, and holds the PR for this chat. It refuses until the PR's details are complete.
 
 Both validate, print one line per problem, and on success print a plan diff and rewrite the status parts of `roadmap.md`.
@@ -69,7 +69,7 @@ The script owns these; never write them by hand: `status` (`todo`, `active`, `ch
 
 ## Example
 
-A rough ladder as brainstorm saves it:
+A rough ladder as the roadmap skill saves it:
 
 ```json
 {

@@ -1,9 +1,9 @@
 ---
 name: spec
 description: |
-  Turn an approved brainstorm step, a Linear ticket or GitHub issue, or a narrated request into a spec with testable, grounded acceptance criteria (AC-1…n, each with a Source and a Verify) before any code. The requirements, ACs and definition of done live in the local spec.md; they can optionally be mirrored, after approval, to the Linear ticket (through `ticket`, when Linear is connected) or a GitHub issue. Huge work, 5 or more PRs, gets the longer `prd` spec, kept locally. Later steps (pair, ship, review, qa, done) consume its ACs through `spec.ts acs`.
+  Turn an approved roadmap item, a brainstorm proposal, a Linear ticket or GitHub issue, or a narrated request into a spec with testable, grounded acceptance criteria (AC-1…n, each with a Source and a Verify) before any code. The requirements, ACs and definition of done live in the local spec.md; they can optionally be mirrored, after approval, to the Linear ticket (through `ticket`, when Linear is connected) or a GitHub issue. Huge work, 5 or more PRs, gets the longer `prd` spec, kept locally. Later steps (pair, ship, review, qa, done) consume its ACs through `spec.ts acs`.
 
-  Use when: a brainstorm roadmap step is "requirements" or "spec", the user asks to "write the spec", "write a PRD", "define the acceptance criteria", "what exactly are we building", or runs `/spec [issue|slug|"text"]`, `/spec check`, or `/spec acs`.
+  Use when: a roadmap item is "requirements" or "spec", the user asks to "write the spec", "write a PRD", "define the acceptance criteria", "what exactly are we building", or runs `/spec [issue|slug|"text"]`, `/spec check`, or `/spec acs`.
 user-invocable: true
 metadata:
   origin: local
@@ -51,7 +51,7 @@ Size is the number of PRs the work needs, not days; a 2 to 3 day task is normal.
    - **Linear connected:** draft in the `ticket` skill's format (Purpose, Business Use Case, User Stories, then the above) and hand the approved text to `ticket` to create or update.
    - **Otherwise:** a GitHub issue through `gh issue view`, then `gh issue create` or `gh issue edit` (body from a file).
    Write the ticket key or issue number into the `ticket:` front matter key and re-run the check.
-8. **Hand off.** When the roadmap already lists the PRs, the next step is `/pair plan <slug>` for the next PR; otherwise `/brainstorm resume <slug>` places these AC ids on the roadmap's PRs. Offer the `handoff` skill first (a fresh session).
+8. **Hand off.** When the roadmap already lists the PRs, the next step is `/pair plan <slug>` for the next PR; otherwise `/roadmap <slug>` (or `/roadmap resume <slug>`) places these AC ids on the roadmap's PRs. Offer the `handoff` skill first (a fresh session).
 
 ## Changing an approved spec
 
