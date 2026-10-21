@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
-// Initiative state for brainstorm/handoff: one dir per initiative under state/work/<slug>/
-// (roadmap.md, decisions.md, handoff.md) plus active.json mapping a cwd to its initiative.
+// Initiative state for brainstorm/roadmap/handoff: one dir per initiative under state/work/<slug>/
+// (decisions.md, then problem.md, ideas.md and proposal.md from brainstorm, roadmap.md from roadmap,
+// handoff.md) plus active.json mapping a cwd to its initiative.
 // Deterministic file ops only; the skills write the prose.
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -19,7 +20,7 @@ type Info = {
   slug: string;
   title: string;
   dir: string;
-  roadmap: string;
+  roadmap: string | null;
   decisions: string;
   handoff: string | null;
   step: Step | null;
@@ -109,9 +110,11 @@ function validSlug(slug: string | undefined): string {
   return slug;
 }
 
+const isInitiative = (dir: string) => existsSync(join(dir, "decisions.md")) || existsSync(join(dir, "roadmap.md"));
+
 function existing(slug: string): string {
   const dir = join(STATE_DIR, validSlug(slug));
-  if (!existsSync(join(dir, "roadmap.md"))) throw new UserError(`no initiative "${slug}" (see: work list)`);
+  if (!isInitiative(dir)) throw new UserError(`no initiative "${slug}" (see: work list)`);
   return dir;
 }
 
@@ -153,7 +156,7 @@ const currentStep = (steps: Step[]) =>
 const stepLine = (s: Step | null, steps: Step[]) =>
   s ? `step ${s.n}/${steps.length}: ${s.step} [${s.status}]` : steps.length ? "all steps done" : "no steps yet";
 
-// Roadmaps written by brainstorm carry a "**Next up: PR <n>, <name>.** Start it ... with `<command>`." line
+// Roadmaps written by the roadmap skill carry a "**Next up: PR <n>, <name>.** Start it ... with `<command>`." line
 // that pair keeps current; older roadmaps carry a "## Steps" table instead.
 function parseNext(md: string): Info["next"] {
   const line = md.split("\n").find((l) => /^\*\*Next up:/.test(l.trim()));
@@ -164,6 +167,7 @@ function parseNext(md: string): Info["next"] {
 }
 
 const statusLine = (i: Info, md: string) => {
+  if (!i.roadmap) return "ideation, no roadmap yet";
   if (i.next) return `next up: ${i.next.text}${i.next.command ? ` · start with ${i.next.command}` : ""}`;
   const steps = parseSteps(md);
   return steps.length ? stepLine(i.step, steps) : "no PRs or steps yet";
@@ -173,39 +177,22 @@ function info(slug: string): Info {
   const dir = existing(slug);
   const roadmap = join(dir, "roadmap.md");
   const handoff = join(dir, "handoff.md");
-  const md = readFileSync(roadmap, "utf8");
+  const hasRoadmap = existsSync(roadmap);
+  const md = hasRoadmap ? readFileSync(roadmap, "utf8") : "";
+  const decisionsFile = join(dir, "decisions.md");
+  const decisionsTitle = (existsSync(decisionsFile) ? readFileSync(decisionsFile, "utf8") : "").match(/^#\s+Decisions:\s*(.+)$/m)?.[1]?.trim();
   const mtimes = readdirSync(dir).map((f) => statSync(join(dir, f)).mtimeMs);
   return {
     slug,
-    title: md.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? slug,
+    title: md.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? decisionsTitle ?? slug,
     dir,
-    roadmap,
-    decisions: join(dir, "decisions.md"),
+    roadmap: hasRoadmap ? roadmap : null,
+    decisions: decisionsFile,
     handoff: existsSync(handoff) ? handoff : null,
     step: currentStep(parseSteps(md)),
     next: parseNext(md),
     updatedAt: new Date(Math.max(...mtimes)).toISOString(),
   };
-}
-
-function roadmapSkeleton(slug: string, title: string) {
-  return `# ${title}
-
-**Next up: PR 1, <short name>.** Start it in a fresh chat with \`/pair plan ${slug}\`.
-
-## What we are doing and why
-<2 to 4 plain sentences>
-
-## Milestone 1: <what users can do when it is done>
-
-**PR 1: <short name>** (next)
-<1 to 3 sentences: what users can do after it goes live.>
-Rough plan: <commits in plain words>.
-
-## Not in this plan
-
-## Open questions
-`;
 }
 
 function emit(json: boolean, data: unknown, human: () => void) {
@@ -222,7 +209,6 @@ function cmdNew(args: Args) {
   const dir = join(STATE_DIR, slug);
   if (existsSync(dir)) throw new UserError(`initiative "${slug}" already exists`);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "roadmap.md"), roadmapSkeleton(slug, title));
   writeFileSync(join(dir, "decisions.md"), `# Decisions: ${title}\n`);
   const cwd = cwdOf(args);
   setActive(cwd, slug);
@@ -237,12 +223,12 @@ function cmdList(args: Args) {
   const active = loadActive();
   const slugs = existsSync(STATE_DIR)
     ? readdirSync(STATE_DIR, { withFileTypes: true })
-        .filter((e) => e.isDirectory() && SLUG_RE.test(e.name) && existsSync(join(STATE_DIR, e.name, "roadmap.md")))
+        .filter((e) => e.isDirectory() && SLUG_RE.test(e.name) && isInitiative(join(STATE_DIR, e.name)))
         .map((e) => e.name)
     : [];
   const rows = slugs.map((slug) => {
     const i = info(slug);
-    const md = readFileSync(i.roadmap, "utf8");
+    const md = i.roadmap ? readFileSync(i.roadmap, "utf8") : "";
     const cwds = Object.entries(active).filter(([, v]) => v.slug === slug).map(([k]) => k);
     return { slug, title: i.title, step: statusLine(i, md), next: i.next, updatedAt: i.updatedAt, activeCwds: cwds };
   });
@@ -274,11 +260,11 @@ function cmdCurrent(args: Args) {
     return emit(args.flags.has("--json"), { slug: null, cwd }, () => console.log(`no active initiative for ${cwd}`));
   }
   const i = info(hit.slug);
-  const line = statusLine(i, readFileSync(i.roadmap, "utf8"));
+  const line = statusLine(i, i.roadmap ? readFileSync(i.roadmap, "utf8") : "");
   emit(args.flags.has("--json"), { ...i, stepLine: line, activeFor: hit.cwd }, () => {
     console.log(`${i.title} (${i.slug})`);
     console.log(`current: ${line}`);
-    console.log(`roadmap: ${i.roadmap}`);
+    console.log(`roadmap: ${i.roadmap ?? "none yet"}`);
     console.log(`decisions: ${i.decisions}`);
     console.log(`handoff: ${i.handoff ?? "none yet"}`);
   });
@@ -314,6 +300,7 @@ function cmdStep(args: Args) {
   if (!nRaw || !/^\d+$/.test(nRaw)) throw new UserError("usage: work step <slug|-> <n> <todo|active|done|skipped>");
   if (!status || !STATUSES.includes(status)) throw new UserError(`status must be one of ${STATUSES.join(", ")}`);
   const file = join(existing(slug), "roadmap.md");
+  if (!existsSync(file)) throw new UserError(`no roadmap for ${slug} yet (the roadmap skill writes it)`);
   const lines = readFileSync(file, "utf8").split("\n");
   const [start, end] = stepsSection(lines);
   if (start < 0) throw new UserError(`no "## Steps" section in ${file}: this roadmap lists PRs, and pair keeps their statuses current (pair roadmap sync)`);
@@ -367,7 +354,7 @@ async function cmdHandoff(args: Args) {
   }
 
   const l = mode === "compact" ? null : launcher();
-  const command = mode === "compact" ? `/compact ${focus}` : (str(args, "--resume") ?? `/brainstorm resume ${slug}`);
+  const command = mode === "compact" ? `/compact ${focus}` : (str(args, "--resume") ?? (existsSync(join(dir, "roadmap.md")) ? `/roadmap resume ${slug}` : `/brainstorm resume ${slug}`));
   const terminal = l ? startLine(command, l) : null;
   const inSession = l ? resumeLines(slug, l).inSession : null;
   const copied = await copy(command);
