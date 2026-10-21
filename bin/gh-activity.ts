@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 // Read-only GitHub activity for the gather-context skill: a person's activity in a time window, one PR's
-// full state (checks, reviews, review threads), and a repo's git/GitHub conventions.
-// gh CLI only. Never pushes, comments, edits or resolves anything.
-// The branch skill's br.ts imports the repo-level helpers below; keep them free of CLI side effects.
+// full state (checks, reviews, review threads), a repo's git/GitHub conventions, where new work merges,
+// and which logged-in gh account a repo's work belongs to.
+// gh CLI only. Never pushes, comments, edits, resolves or switches accounts.
+// Other scripts (wt.ts, pr.ts) import the repo-level helpers below; keep them free of CLI side effects.
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -67,12 +68,12 @@ let ghToken: string | undefined;
 // Non-interactive gh, using the repo owner's token once useAccountFor has picked it.
 export const ghEnv = (): Record<string, string> => ({ GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", ...(ghToken ? { GH_TOKEN: ghToken } : {}) });
 
-async function run(cmd: string[], cwd: string) {
+async function run(cmd: string[], cwd: string, extra: Record<string, string> = {}) {
   const p = Bun.spawn(cmd, {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, ...ghEnv() },
+    env: { ...process.env, ...ghEnv(), ...extra },
   });
   const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
   return { code, out, err };
@@ -113,12 +114,51 @@ export async function localRepo(cwd: string): Promise<Local | null> {
   return { root, commonDir, branch: branch || null };
 }
 
-// With several gh accounts logged in, a repo owned by a non-active account is invisible to the active
-// one. Use that account's token for this process only; never `gh auth switch` (global state).
+// ---------- accounts ----------
+
+type Access = "push" | "read" | "none";
+export type Account = { login: string; active: boolean; access: Access };
+
+async function tokenFor(login: string) {
+  const r = await run(["gh", "auth", "token", "--user", login], process.cwd());
+  return r.code === 0 && r.out.trim() ? r.out.trim() : undefined;
+}
+
+async function accessOf(token: string, repo: string): Promise<Access> {
+  const r = await run(["gh", "api", `repos/${repo}`, "--jq", ".permissions.push"], process.cwd(), { GH_TOKEN: token });
+  if (r.code !== 0) return "none";
+  return r.out.trim() === "true" ? "push" : "read";
+}
+
+// Every logged-in github.com account with its access to repo, and the one the repo's work belongs to:
+// the owner's own account when it can push, else the only account that can push. Two or more pushers
+// with none of them the owner (an org repo both accounts belong to) is ambiguous: account is null.
+export async function accountFor(repo: string) {
+  const r = await run(["gh", "auth", "status", "--json", "hosts"], process.cwd(), { GH_TOKEN: "", GITHUB_TOKEN: "" });
+  if (r.code !== 0) throw new UserError("gh is not authenticated (run: gh auth login)");
+  const logins = ((JSON.parse(r.out).hosts?.["github.com"] ?? []) as Node[]).filter((a) => a.state === "success");
+  const accounts = await Promise.all(
+    logins.map(async (a) => {
+      const token = await tokenFor(a.login);
+      return { login: a.login as string, active: !!a.active, access: token ? await accessOf(token, repo) : ("none" as Access), token };
+    }),
+  );
+  const owner = repo.split("/")[0]!.toLowerCase();
+  const pushers = accounts.filter((a) => a.access === "push");
+  const account = pushers.find((a) => a.login.toLowerCase() === owner) ?? (pushers.length === 1 ? pushers[0]! : null);
+  return { accounts, account, ambiguous: !account && pushers.length > 1 };
+}
+
+// Scripts read a repo through its account's token for this process only; the active account is untouched.
 export async function useAccountFor(repo: string) {
   if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) return;
-  const r = await run(["gh", "auth", "token", "--user", repo.split("/")[0]!], process.cwd());
-  ghToken = r.code === 0 && r.out.trim() ? r.out.trim() : undefined;
+  const own = await tokenFor(repo.split("/")[0]!);
+  if (own) {
+    ghToken = own;
+    return;
+  }
+  const { accounts, account } = await accountFor(repo);
+  ghToken = (account ?? accounts.find((a) => a.active && a.access !== "none") ?? accounts.find((a) => a.access !== "none"))?.token;
 }
 
 export async function originRepo(local: Local): Promise<string> {
@@ -565,6 +605,58 @@ async function cmdConventions(args: Args) {
   });
 }
 
+// ---------- target ----------
+
+async function cmdTarget(args: Args) {
+  allowFlags(args, ["--repo", "--cwd"]);
+  const { repo } = await resolveRepo(args);
+  const { target, defaultBranch } = await repoConventions(repo);
+  if (!target) throw new UserError(`${repo} has no merged PRs and no default branch`);
+  emit(args.flags.has("--json"), { repo, ...target, defaultBranch }, () => {
+    console.log(`${target.branch} (${target.source})`);
+    console.log(`  ${target.evidence}`);
+    console.log(`  new branches start from origin/${target.branch}`);
+  });
+}
+
+// ---------- account ----------
+
+async function cmdAccount(args: Args) {
+  allowFlags(args, ["--repo", "--cwd"]);
+  const cwd = cwdOf(args);
+  const flag = str(args, "--repo");
+  if (flag && !REPO_RE.test(flag)) throw new UserError(`--repo must be owner/name, got "${flag}"`);
+  const local = flag ? null : await localRepo(cwd);
+  if (!flag && !local) throw new UserError(`not a git repository: ${cwd} (pass --repo owner/name)`);
+  const repo = flag ?? (await originRepo(local!));
+  const { accounts, account, ambiguous } = await accountFor(repo);
+  const active = accounts.find((a) => a.active)?.login ?? null;
+  let identity: { name: string; email: string } | null = null;
+  if (account?.token) {
+    const r = await run(["gh", "api", "user", "--jq", ".id"], cwd, { GH_TOKEN: account.token });
+    if (r.code === 0) identity = { name: account.login, email: `${r.out.trim()}+${account.login}@users.noreply.github.com` };
+  }
+  const match = !!account && account.login === active;
+  const out = {
+    repo,
+    active,
+    account: account?.login ?? null,
+    match,
+    switch: account && !match ? `gh auth switch --user ${account.login}` : null,
+    identity,
+    ambiguous,
+    accounts: accounts.map(({ login, active, access }) => ({ login, active, access })),
+  };
+  emit(args.flags.has("--json"), out, () => {
+    console.log(repo);
+    for (const a of out.accounts) console.log(`  ${a.login.padEnd(20)} ${a.access.padEnd(5)}${a.active ? " (active)" : ""}`);
+    if (ambiguous) console.log(`  ambiguous: ${accounts.filter((a) => a.access === "push").map((a) => a.login).join(", ")} can all push; ask which one this work belongs to`);
+    else if (!account) console.log("  no logged-in account can push to this repo");
+    else console.log(`  account ${account.login}${match ? " (active)" : `; switch: ${out.switch}`}`);
+    if (identity) console.log(`  commit  git -c user.name=${identity.name} -c user.email=${identity.email} commit`);
+  });
+}
+
 const USAGE = `usage: gh-activity <command> [--json]   (read-only; gh CLI only)
   me --since <when> [--until <when>] [--repos o/a,o/b] [--user <login>]
                                                          PRs authored/reviewed/commented, open review requests,
@@ -572,7 +664,12 @@ const USAGE = `usage: gh-activity <command> [--json]   (read-only; gh CLI only)
                                                          <when>: today | yesterday | <n>d | YYYY-MM-DD | ISO datetime
   pr <number|url|branch> [--repo o/r] [--cwd <dir>]      PR metadata, checks, reviewers, review threads, ticket
   conventions [--repo o/r] [--cwd <dir>]                 integration target with evidence, default branch,
-                                                         branch/ticket prefixes, PR title style, gh stack`;
+                                                         branch/ticket prefixes, PR title style, gh stack
+  target [--repo o/r] [--cwd <dir>]                      where new work merges: most common base of the last
+                                                         30 merged PRs, else the default branch
+  account [--repo o/r] [--cwd <dir>]                     the logged-in account the repo's work belongs to,
+                                                         the switch command when it is not active, and
+                                                         its commit identity`;
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
@@ -584,6 +681,10 @@ async function main() {
       return cmdPr(args);
     case "conventions":
       return cmdConventions(args);
+    case "target":
+      return cmdTarget(args);
+    case "account":
+      return cmdAccount(args);
     default:
       console.error(USAGE);
       process.exit(1);

@@ -36,7 +36,7 @@ Each chat takes one PR of the roadmap from plan to draft PR: plan, build, checkp
 | `pair plan show` | The ladder by milestone, timeline against the deadline, AC coverage |
 | `pair plan save <slice.json> --slice <n> --plan <plan.md>` | Store an approved PR plan (see `references/plan-mode.md`) |
 | `pair plan save <ladder.json>` | Store a whole ladder (brainstorm's job; pair uses it only when the user changes the roadmap here) |
-| `pair slice start <n>` | This chat takes PR n; prints the `br new` command for its branch |
+| `pair slice start <n>` | This chat takes PR n; prints the `git switch` command for its branch |
 | `pair check` / `pair commit …` | Gate and record each commit (`references/commits.md`) |
 | `pair green` / `pair walk` | Every commit passes its check; the walkthrough source (`references/checkpoint.md`) |
 | `pair slice ship <n> --pr <number>` | Record the draft PR that `/ship` opened |
@@ -72,7 +72,7 @@ Run the plan gate in `references/plan-mode.md` for this PR only. The plan is ela
 
 ## Build
 
-Run `pair slice start <n>`; ask whether to switch here or open a worktree when that is not already clear, and run the printed `br new` command. Then build the whole PR in one run, commit after commit, with no pause for the user between commits: builder, review of its diff, `pair check`, the commit's check, staging by path, `pair commit`. Commits stay local: pair never pushes; `/ship` pushes after the user's OK. The loop and the message format are in `references/commits.md`. Stop only for a `pair check` exit 2, a planned commit that proves wrong, or about 30 minutes blocked; each of those goes to the user as options with a recommendation, and an answer that changes the plan opens the re-plan gate.
+Run `pair slice start <n>`; ask whether to switch here or open a worktree when that is not already clear, and run the printed `git switch` command (a parallel session uses `wt new` through the `worktree` skill). Then build the whole PR in one run, commit after commit, with no pause for the user between commits: builder, review of its diff, `pair check`, the commit's check, staging by path, `pair commit`. Commits stay local: pair never pushes; `/ship` pushes after the user's OK. The loop and the message format are in `references/commits.md`. Stop only for a `pair check` exit 2, a planned commit that proves wrong, or about 30 minutes blocked; each of those goes to the user as options with a recommendation, and an answer that changes the plan opens the re-plan gate.
 
 ## Checkpoint, walkthrough, ship
 

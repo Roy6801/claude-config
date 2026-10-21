@@ -46,7 +46,7 @@ The full rubric is in `references/rubric.md`: the eight non-negotiable standards
 
 ## Flow
 
-1. **Resolve the range.** For a PR, run `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts pr <n> --json` and use `base...headSha` (fetch both refs first). For the current branch, run `bun $CLAUDE_CONFIG_DIR/skills/branch/scripts/br.ts where --json`: the base is the open PR's base, else the gh stack parent, else `target.branch`. Always use the three-dot range so base commits are excluded.
+1. **Resolve the range.** For a PR, run `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts pr <n> --json` and use `base...headSha` (fetch both refs first). For the current branch, run `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts conventions --json`: the base is `integrationTarget.branch`. Always use the three-dot range so base commits are excluded.
 2. **Read the diff.** `git diff --stat` first, then the source files, highest signal first; generated files and lockfiles are counted, not reviewed. Never claim to have read what you skimmed. For every file the diff grows, record its line count before and after (`git show <base>:<path> | wc -l` against `wc -l <path>`).
 3. **Read the conventions.** When a conventions bundle is given, read it. Otherwise, for every mechanism the diff adds or changes (auth checks, error handling, data access, a named helper), grep the repo for the existing pattern and count call sites. A helper with many call sites is a decision; following it is not a finding, and hand-rolling around it is.
 4. **Review against the rubric.** Ask the primary review questions of every meaningful change. Look for the code-judo move first, then the presumptive blockers, then the rest, in the rubric's output priority order.

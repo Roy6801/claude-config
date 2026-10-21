@@ -14,7 +14,7 @@ Gather them through read-only agents so the main thread stays free:
 
 ## Running the gate
 
-Plan mode is read-only: exploring, agents and the plan file only. Every state write (`pair`, `work.ts`, `br`, tickets or issues, the repo) waits for approval.
+Plan mode is read-only: exploring, agents and the plan file only. Every state write (`pair`, `work.ts`, tickets or issues, the repo) waits for approval.
 
 1. Call EnterPlanMode. If the user declines it, write the same plan into the chat and treat their explicit OK as the approval.
 2. Gather the inputs above.

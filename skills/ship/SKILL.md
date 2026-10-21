@@ -1,7 +1,7 @@
 ---
 name: ship
 description: |
-  Create or update the draft pull request for a branch or a planned slice. A script (`pr.ts`) resolves the facts: the base (the open PR's base, the gh stack parent, else the integration target from `br target`), commits since the base, net lines against the 500-line budget, the linked ticket, the pair slice, the repo's PR template, and any open PR. Runs `review self` first, stops on an over-budget diff to propose a split or an explained exception, drafts a Conventional title and a human-readable body (what the PR does, never the output of checks) from the template, the ticket and spec ACs, the commits, and an Evidence section whose screenshots or video the user has reviewed, shows the exact text, and only after approval pushes with `br push` and creates or edits the PR. PRs open as drafts assigned to the user; this skill never force-pushes, and marks ready or merges only when the user asks.
+  Create or update the draft pull request for a branch or a planned slice. A script (`pr.ts`) resolves the facts: the base (the open PR's base, the gh stack parent, else the integration target from `gh-activity.ts target`), commits since the base, net lines against the 500-line budget, the linked ticket, the pair slice, the repo's PR template, and any open PR. Runs `review self` first, stops on an over-budget diff to propose a split or an explained exception, drafts a Conventional title and a human-readable body (what the PR does, never the output of checks) from the template, the ticket and spec ACs, the commits, and an Evidence section whose screenshots or video the user has reviewed, shows the exact text, and only after approval pushes with `git push --no-verify -u origin <branch>` and creates or edits the PR. PRs open as drafts assigned to the user; this skill never force-pushes, and marks ready or merges only when the user asks.
 
   Use when: a slice passed its checkpoint and needs its PR, creating a PR, updating an open PR's title or description, drafting a PR description, or asked to "ship this", "write the PR", "prep the PR", "create a PR", "update the PR", or `/ship [branch]`.
 user-invocable: true
@@ -18,7 +18,8 @@ Turn a branch into a draft PR a reviewer can hold in their head: the right base,
 - `pr` means `bun <base directory of this skill>/scripts/pr.ts`. Run it inside the repo or one of its worktrees; `--branch <b>` targets a branch other than the current one. Every command takes `--json`. Failures print one line to stderr and exit 1; warnings go to stderr and into the JSON `warnings` array. Relay every warning.
   - `pr facts`: branch, checkout path, push state, base with its source and evidence, commits since the base, size (`net` = added minus deleted, lockfiles, generated files, changesets and snapshots excluded; `over` when net exceeds 500), ticket key, the pair slice whose branch this is, the PR template path (or the choices when a template folder holds several), and the open PR (number, draft, base, url).
   - `pr upsert --title <t> --body-file <f> [--base <b>] [--attach ./<file>[#alt]]... [--dry-run]`: creates a draft PR assigned to the user (`@me`) when none is open (the branch must be on origin), else edits the open PR's title and body and adds the user as assignee. Each `--attach` uploads an image or video that sits next to the body file and that the body references as `](./<file>)`; gh rewrites the reference to the uploaded asset. An attachment the body never references is appended at the end, and `upsert` warns. `--base` on an open PR retargets it, refused inside a gh stack. It never changes draft state, never marks ready, and refuses a title or body that carries a session link or AI attribution.
-- Pushing belongs to the `branch` skill: `br push [<branch>]` (never forces). Stacks are created by `br stack`; this skill never runs `gh stack` itself.
+- Pushing is `git push --no-verify -u origin <branch>`, never forced without the user's consent.
+- Before the first push or PR in a session, run `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts account --json`. When `match` is false or `ambiguous` is true, show the user the active account, the account the repo belongs to and the `switch` command, and switch only after their OK. Commits use the printed identity: `git -c user.name=… -c user.email=… commit`.
 - Never re-implement a script step with raw git or gh. If a script cannot do something, say so.
 
 ## Workflow
@@ -61,7 +62,7 @@ Send every attachment to the user (`SendUserFile`), each with a caption saying w
 
 Write the body to a scratchpad file. Show the exact title, the full body, the base, and the list of actions that will run:
 
-1. `br push <branch>` when `remote.exists` is false or `remote.ahead` is above 0. When `remote.behind` is above 0, stop and ask.
+1. Push (`git push --no-verify -u origin <branch>`) when `remote.exists` is false or `remote.ahead` is above 0. When `remote.behind` is above 0, stop and ask.
 2. `pr upsert --title "<title>" --body-file <file> --attach ./<file>#<alt> ... --dry-run`, with one `--attach` per approved file, then show its command.
 3. The same without `--dry-run`.
 
@@ -69,7 +70,13 @@ Invoking ship is the user's OK: when the user asked to create or update the PR, 
 
 ### 7. Stacked slices
 
-One PR per slice, each based on the slice below it. If `br stack --draft-prs` already opened the PRs with placeholder bodies, every slice is update mode. Ship bottom to top. An open-PR cap, when the user set one, belongs to `br stack`; a slice whose PR is waiting on the cap gets its PR when `br stack` opens it.
+One PR per slice, each based on the slice below it. Ship drives the `gh-stack` skill's non-interactive commands directly: build one layer, rebase it on its parent, push, open its draft PR, then the next.
+
+- After every `gh stack push` or `submit`, set upstream per branch (`git branch --set-upstream-to=origin/<b> <b>`) and confirm `git rev-list --left-right --count <b>...origin/<b>` is `0 0`.
+- When the user set an open-PR cap, count their open PRs in the repo (drafts included) before opening PRs and stop at the cap.
+- A CI-trigger label goes on the top PR only.
+- When the repo has a CI job that rewrites PR bodies on open, push or label, wait for it before writing bodies.
+- PR bodies never mention the stack or link siblings.
 
 ### 8. After
 

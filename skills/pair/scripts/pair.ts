@@ -12,7 +12,6 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 const STATE_DIR = process.env.PAIR_STATE_DIR || join(import.meta.dir, "..", "..", "..", "state", "work");
 const WORK_TS = join(import.meta.dir, "..", "..", "..", "bin", "work.ts");
 const SPEC_TS = join(import.meta.dir, "..", "..", "spec", "scripts", "spec.ts");
-const BR_TS = join(import.meta.dir, "..", "..", "branch", "scripts", "br.ts");
 const DB_GUARD = join(import.meta.dir, "..", "..", "..", "hooks", "db-guard.js");
 const SESSION_ENV = "CLAUDE_CODE_SESSION_ID";
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -360,7 +359,7 @@ export function validatePlan(raw: unknown, ctx: { slug: string; repo: string | n
   if (r.deadline !== undefined && !isDate(r.deadline)) problems.push(`deadline must be YYYY-MM-DD`);
   const cap = r.cap ?? DEFAULT_CAP;
   if (!Number.isInteger(cap) || (cap as number) < 1) problems.push("cap must be a positive integer");
-  if (!isStr(r.base)) problems.push("base (the integration target from br target) is required");
+  if (!isStr(r.base)) problems.push("base (the integration target from gh-activity.ts target) is required");
   if (!Array.isArray(r.slices) || !r.slices.length) {
     problems.push("slices must be a non-empty array");
     return { plan: null, problems, notes };
@@ -609,6 +608,26 @@ export function planDiff(old: Pair | null, next: Pair): { diff: string[]; droppe
   }
   if (!diff.length) diff.push("no plan changes");
   return { diff, dropped };
+}
+
+const BRANCH_PREFIXES = new Set(["feature", "feat", "fix", "bugfix", "hotfix", "chore", "docs", "doc", "test", "tests", "poc", "spike", "refactor"]);
+
+export function parsePlan(raw: unknown) {
+  const bad = (m: string) => new UserError(`invalid plan: ${m}`);
+  if (!raw || typeof raw !== "object") throw bad("expected a JSON object");
+  const { base, branches } = raw as Record<string, unknown>;
+  if (base !== undefined && (typeof base !== "string" || !base)) throw bad("base must be a non-empty string");
+  if (!Array.isArray(branches) || branches.length === 0) throw bad("branches must be a non-empty array");
+  const seen = new Set<string>();
+  for (const [i, b] of branches.entries()) {
+    const { name, title } = (b ?? {}) as Record<string, unknown>;
+    if (typeof name !== "string" || !name) throw bad(`branches[${i}].name must be a non-empty string`);
+    if (typeof title !== "string" || !title.trim()) throw bad(`branches[${i}].title must be a non-empty string`);
+    if (!BRANCH_PREFIXES.has(name.split("/")[0]!) || !name.includes("/"))
+      throw bad(`${name} lacks a conventional prefix (${[...BRANCH_PREFIXES].map((p) => `${p}/`).join(", ")})`);
+    if (seen.has(name)) throw bad(`${name} appears twice`);
+    seen.add(name);
+  }
 }
 
 export function stackPlan(p: Pair) {
@@ -897,7 +916,7 @@ const headSlice = async (top: string, pair: Pair) => {
   return pair.slices.find((s) => s.branch === head) ?? null;
 };
 
-// Slice n stacks on slice n-1's branch; slice 1 on the integration target (origin first: br branches from it).
+// Slice n stacks on slice n-1's branch; slice 1 on the integration target (origin first: new branches start from it).
 async function sliceBase(top: string, pair: Pair, s: Slice): Promise<string> {
   const prev = pair.slices.find((x) => x.n === s.n - 1);
   const target = pair.base.startsWith("origin/") ? [pair.base] : [`origin/${pair.base}`, pair.base];
@@ -1003,10 +1022,9 @@ async function cmdPlanSave(args: Args) {
   }
   if (plan && !problems.length) {
     try {
-      const { parsePlan } = await import(BR_TS);
       parsePlan(stackPlan(plan));
     } catch (e) {
-      problems.push(`branches would not pass br stack: ${(e as Error).message}`);
+      problems.push(`branch names are invalid: ${(e as Error).message}`);
     }
   }
   const json = args.flags.has("--json");
@@ -1028,13 +1046,10 @@ async function cmdPlanSave(args: Args) {
   for (const d of dropped) warn(d);
   save(init.file, plan);
   const roadmap = syncRoadmapFile(init.dir, plan);
-  const stackFile = join(init.dir, "stack.json");
-  writeAtomic(stackFile, JSON.stringify(stackPlan(plan), null, 2) + "\n");
-  emit(json, { ok: true, file: init.file, stack: stackFile, slices: plan.slices.length, plan_file: target?.plan_file ?? null, diff, roadmap: roadmap.changed }, () => {
+  emit(json, { ok: true, file: init.file, slices: plan.slices.length, plan_file: target?.plan_file ?? null, diff, roadmap: roadmap.changed }, () => {
     console.log(`saved ${init.file}`);
     if (target) console.log(`PR ${target.n}: plan approved and saved to ${target.plan_file}; build it here, or in a fresh chat with /pair implement ${plan.slug}`);
     for (const c of roadmap.changed) console.log(`roadmap: ${c}`);
-    console.log(`stack plan ${stackFile} (br stack ${stackFile} --dry-run)`);
     for (const d of diff) console.log(d);
   });
 }
@@ -1282,7 +1297,7 @@ async function cmdCommit(args: Args) {
   const s = await headSlice(top, pair);
   if (!s) {
     const cur = currentSlice(pair);
-    throw new UserError(`HEAD is ${head ?? "detached"}, which is no PR's branch${cur ? `; PR ${cur.n} commits go on ${cur.branch} (br new ${cur.branch} --here)` : " (pair slice start <n> prints the br command)"}`);
+    throw new UserError(`HEAD is ${head ?? "detached"}, which is no PR's branch${cur ? `; PR ${cur.n} commits go on ${cur.branch} (git switch ${cur.branch})` : " (pair slice start <n> prints the git switch command)"}`);
   }
   if (s.status === "todo") throw new UserError(`PR ${s.n} is not started (pair slice start ${s.n})`);
   const sid = sessionId();
@@ -1373,7 +1388,7 @@ async function cmdGreen(args: Args) {
   const top = await checkout(pair);
   const s = sliceArg(pair, intFlag(args, "--slice"), (await headSlice(top, pair)) ?? currentSlice(pair));
   const head = await branchOf(top);
-  if (head !== s.branch) throw new UserError(`HEAD is ${head ?? "detached"}; switch to ${s.branch} first (br new ${s.branch} --here)`);
+  if (head !== s.branch) throw new UserError(`HEAD is ${head ?? "detached"}; switch to ${s.branch} first (git switch ${s.branch})`);
   const dirty = (await git(top, "status", "--porcelain", "--untracked-files=all")).split("\n").filter(Boolean);
   if (dirty.length) throw new UserError(`green needs a clean tree (${dirty.length} change(s), untracked included); commit or stash first`);
   for (const d of ["rebase-merge", "rebase-apply"])
@@ -1528,8 +1543,8 @@ async function cmdSlice(args: Args) {
     return emit(json, { slice: s.n, status: s.status, pr, changed, next: next && { n: next.n, title: next.title, starter }, milestone: gate && { name: gate.milestone, open: gate.slices.map((x) => x.n) }, message: line }, () => console.log(line));
   }
 
-  const cmd = `br new ${s.branch} --here --base ${base}`;
-  const brWorktree = `br new ${s.branch} --worktree --base ${base}`;
+  const cmd = `git fetch origin && git switch -c ${s.branch} ${base}`;
+  const worktreeCmd = `wt new ${s.branch} --base ${base}`;
   let message: string;
   if (isShipped(s)) message = `PR ${s.n} is shipped${s.pr ? ` as #${s.pr}` : ""}; this chat takes fixes to it and roadmap updates only`;
   else if (isBuilt(s)) message = `PR ${s.n} is built; next: green, the walkthrough, then /ship`;
@@ -1554,9 +1569,9 @@ async function cmdSlice(args: Args) {
   save(file, pair);
   syncRoadmapFile(dirname(file), pair);
   const next = nextCommit(s);
-  emit(json, { slice: s.n, status: s.status, state: stateOf(s), branch: s.branch, plan_file: s.plan_file ?? null, br: cmd, brWorktree, next: next && !isShipped(s) ? { n: next.n, title: next.title } : null, message }, () => {
+  emit(json, { slice: s.n, status: s.status, state: stateOf(s), branch: s.branch, plan_file: s.plan_file ?? null, switch: cmd, worktree: worktreeCmd, next: next && !isShipped(s) ? { n: next.n, title: next.title } : null, message }, () => {
     console.log(message);
-    console.log(`switch to its branch: ${cmd}   (or --worktree instead of --here)`);
+    console.log(`switch to its branch: ${cmd}\n(or a parallel session through the worktree skill: ${worktreeCmd})`);
   });
 }
 
@@ -1603,7 +1618,7 @@ async function cmdRoadmaps(args: Args) {
 }
 
 const USAGE = `usage: pair <command> [--slug <slug>] [--json]   (default slug: work current for the cwd)
-  plan save <file.json>            validate and store the whole ladder (brainstorm); writes pair.json and stack.json
+  plan save <file.json>            validate and store the whole ladder (brainstorm); writes pair.json
   plan save <slice.json> --slice <n> --plan <plan.md>
                                    store PR n's approved plan: detailed commits, the plan file (pr-<n>-plan.md), approval
   plan show                        ladder by milestone, state of each PR, timeline vs deadline, AC coverage
@@ -1614,7 +1629,7 @@ const USAGE = `usage: pair <command> [--slug <slug>] [--json]   (default slug: w
                                    commit what is staged as the next planned commit of HEAD's PR (or an extra one with --title)
   green [--slice <n>]              every commit of the PR passes its check (rebase --keep-base -x; SHAs unchanged)
   walk [--slice <n> | --commit <sha>]   commit-by-commit walkthrough, deviations first
-  slice start <n> [--force]        this chat takes PR n (one PR per chat); prints the br command
+  slice start <n> [--force]        this chat takes PR n (one PR per chat); prints the git switch command
   slice ship <n> --pr <number>     record the draft PR that /ship opened; prints the next PR and its starter
   slice live <n> [<n>…]            record merged PRs as live (the done skill runs it after it verifies the merge)
   roadmap sync                     rewrite the PR statuses and the Next up line of roadmap.md from the ladder

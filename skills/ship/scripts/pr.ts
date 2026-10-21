@@ -4,9 +4,8 @@
 // edits an existing PR's title, body and base; it never marks a PR ready, merges, or pushes.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { ghEnv, localRepo, originRepo, stackOf, ticketKey, useAccountFor, type Local } from "../../../bin/gh-activity.ts";
+import { ghEnv, localRepo, originRepo, repoConventions, stackOf, ticketKey, useAccountFor, type Local } from "../../../bin/gh-activity.ts";
 
-const BR = join(import.meta.dir, "..", "..", "branch", "scripts", "br.ts");
 const WORK_DIR = process.env.SHIP_WORK_DIR || join(import.meta.dir, "..", "..", "..", "state", "work");
 const VALUE_FLAGS = new Set(["--branch", "--cwd", "--title", "--body-file", "--base"]);
 export const NET_BUDGET = 500;
@@ -141,8 +140,8 @@ export function planUpsert(o: {
     if (!o.base) throw new UserError("no base: pass --base <branch>");
     if (o.base === o.branch) throw new UserError(`base and head are both ${o.branch}`);
     if (!o.remoteHead) {
-      if (!o.dryRun) throw new UserError(`origin/${o.branch} does not exist; push first (br push ${o.branch})`);
-      notes.push(`origin/${o.branch} does not exist yet; push it first (br push ${o.branch}) before running this`);
+      if (!o.dryRun) throw new UserError(`origin/${o.branch} does not exist; push first (git push --no-verify -u origin ${o.branch})`);
+      notes.push(`origin/${o.branch} does not exist yet; push it first (git push --no-verify -u origin ${o.branch}) before running this`);
     }
     return {
       action: "create",
@@ -204,15 +203,13 @@ async function openPr(ctx: Ctx): Promise<{ pr: OpenPr | null; others: number[] }
   return { pr: list[0] ?? null, others: list.slice(1).map((p) => p.number) };
 }
 
-async function integrationTarget(root: string) {
-  const r = await exec(["bun", BR, "target", "--json"], root);
-  if (r.code !== 0) {
-    warn(`br target failed: ${firstLine(r.err)}`);
+async function integrationTarget(repo: string) {
+  try {
+    return (await repoConventions(repo)).target;
+  } catch (e) {
+    warn(`integration target lookup failed: ${firstLine((e as Error).message)}`);
     return null;
   }
-  const t = JSON.parse(r.out) as { branch: string; evidence: string; warnings?: string[] };
-  for (const w of t.warnings ?? []) warn(`br: ${w}`);
-  return t;
 }
 
 // The ref to diff against: the local branch for a stack parent (layers live locally), else origin/<base>.
@@ -283,9 +280,9 @@ async function facts(args: Args) {
   const root = ctx.local.root;
   const stack = stackOf(ctx.local);
   const { pr, others } = await openPr(ctx);
-  const target = pr || stack ? null : await integrationTarget(root);
+  const target = pr || stack ? null : await integrationTarget(ctx.repo);
   const base = chooseBase(pr, stack, target);
-  if (!base) throw new UserError("could not resolve a base (no open PR, no gh stack, br target failed)");
+  if (!base) throw new UserError("could not resolve a base (no open PR, no gh stack, integration target lookup failed)");
   if (base.branch === ctx.branch) throw new UserError(`${ctx.branch} is its own base; ship a work branch`);
   const ref = await baseRef(root, base);
   let commits: { sha: string; subject: string }[] = [];
@@ -345,7 +342,7 @@ async function upsert(args: Args) {
   const stack = stackOf(ctx.local);
   const { pr } = await openPr(ctx);
   let base = str(args, "--base") ?? null;
-  if (!base && !pr) base = chooseBase(null, stack, await integrationTarget(ctx.local.root))?.branch ?? null;
+  if (!base && !pr) base = chooseBase(null, stack, await integrationTarget(ctx.repo))?.branch ?? null;
   const remote = await exec(["git", "ls-remote", "--exit-code", "origin", `refs/heads/${ctx.branch}`], ctx.local.root);
   const plan = planUpsert({ repo: ctx.repo, branch: ctx.branch, title, bodyFile: file, base, pr, inStack: !!stack, remoteHead: remote.code === 0, attach: args.attach, dryRun: args.flags.has("--dry-run") });
   for (const n of plan.notes) warn(n);
@@ -366,7 +363,7 @@ async function upsert(args: Args) {
 
 const USAGE = `usage: pr <command>   (run inside the repo or one of its worktrees)
   facts [--branch <b>] [--cwd <dir>] [--json]
-        branch, base (open PR > gh stack parent > br target), push state, commits since base,
+        branch, base (open PR > gh stack parent > integration target), push state, commits since base,
         size (net lines vs ${NET_BUDGET}, lockfiles/generated/changesets excluded), ticket key,
         pair slice, PR template, existing open PR
   upsert --title <t> --body-file <f> [--base <b>] [--attach ./<file>[#alt]]... [--branch <b>] [--cwd <dir>] [--dry-run] [--json]

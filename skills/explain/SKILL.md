@@ -26,7 +26,7 @@ This skill is **read-only everywhere**: no GitHub comments, reviews, thread reso
 ## 1. Resolve target and base
 
 - **PR given:** `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts pr <n> --json`. Base is `base`, head is `headSha`. Do not ask.
-- **Branch given, or the current branch:** `bun $CLAUDE_CONFIG_DIR/skills/branch/scripts/br.ts where --json` (run inside the branch's checkout, or `gh pr list --head <branch> --state all` when it is not checked out). An open PR's base wins, then the gh stack parent, then `target.branch`. Say which source decided the base and its evidence, and let the user override.
+- **Branch given, or the current branch:** `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts conventions --json` (run inside the branch's checkout, or `gh pr list --head <branch> --state all` when it is not checked out). The base is `integrationTarget.branch` (open PR base, then gh stack parent, then repo target). Say which source decided the base and its evidence, and let the user override.
 
 Fetch the base and head (`git fetch origin <base> <branch>`, or `pull/<n>/head` for a fork). Never check out the branch in the user's working tree.
 

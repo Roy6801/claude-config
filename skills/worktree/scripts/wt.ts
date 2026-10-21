@@ -1,38 +1,26 @@
 #!/usr/bin/env bun
-// Branch manager: integration target, branch names, plain branches, worktrees under
-// ~/worktrees/<project>/<name>, pushes and gh stacks from a plan. Backs the branch skill: the skill
-// maps intent to a subcommand, this script owns every git and gh sequence.
+// Worktree manager: worktrees under ~/worktrees/<project>/<name>, env file sync, install and codegen,
+// listing, removal and pruning. Backs the worktree skill: the skill maps intent to a subcommand, this
+// script owns every git and gh sequence.
 import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { ghEnv, localRepo, originRepo, repoConventions, stackOf, useAccountFor, type Target } from "../../../bin/gh-activity.ts";
+import { ghEnv, localRepo, originRepo, repoConventions, useAccountFor, type Target } from "../../../bin/gh-activity.ts";
 import { openLine } from "../../../bin/launch.ts";
 
 const HOME = homedir();
 const WT_ROOT = join(HOME, "worktrees");
 const ENV_SKIP_DIRS = new Set(["node_modules", ".git", ".next", "dist", ".turbo"]);
 // Lives in the worktree's private git dir, so `git worktree remove` cleans it up.
-const ENV_SOURCE_FILE = "br-env-source";
+const ENV_SOURCE_FILE = "wt-env-source";
+const LEGACY_ENV_SOURCE_FILE = "br-env-source";
 const CODEGEN_SCRIPTS = ["codegen", "generate", "db:generate", "prisma:generate"];
 const MIGRATION_LIKE = /drizzle-kit\s+(generate|migrate|push)|prisma\s+(migrate|db\s+push)|\bmigrat/i;
 // `db:generate` is ambiguous (drizzle uses it for migrations); only run it when it is plainly prisma client generation.
 const isCodegen = (name: string, body: string) =>
   !MIGRATION_LIKE.test(body) && (name !== "db:generate" || /prisma\s+generate/.test(body));
 const DEFAULT_STALE_DAYS = 30;
-const VALUE_FLAGS = new Set(["--base", "--name", "--detach", "--stale", "--type", "--desc", "--ticket", "--cap", "--from"]);
-// Branch type -> accepted prefixes, canonical first. `br name` picks whichever the repo uses most.
-const BRANCH_TYPES: Record<string, string[]> = {
-  feature: ["feature", "feat"],
-  fix: ["fix", "bugfix", "hotfix"],
-  chore: ["chore"],
-  docs: ["docs", "doc"],
-  test: ["test", "tests"],
-  poc: ["poc", "spike"],
-  refactor: ["refactor"],
-};
-const PREFIXES = new Set(Object.values(BRANCH_TYPES).flat());
-const BRANCH_TICKET_RE = /^[\w.-]+\/([A-Za-z]{2,10}-\d+)(?=$|[-_/])/;
-const DEFAULT_PR_CAP = 5;
+const VALUE_FLAGS = new Set(["--base", "--name", "--detach", "--stale", "--from"]);
 
 type Repo = {
   project: string;
@@ -288,57 +276,6 @@ function emit(json: boolean, data: unknown, human: () => void) {
   else human();
 }
 
-// ---------- where ----------
-
-async function where(args: Args) {
-  allowFlags(args, []);
-  const repo = await currentRepo();
-  const top = await git(process.cwd(), "rev-parse", "--show-toplevel");
-  const branch = (await git(process.cwd(), "branch", "--show-current")) || null;
-  const head = await git(process.cwd(), "rev-parse", "--short", "HEAD");
-  const linked = real(top) !== real(repo.mainRoot);
-  const target = await integrationTarget(repo);
-  const newBranchBase = await newWorkBase(repo);
-  const pr = branch ? await openPrFor(repo, branch) : null;
-  const stack = stackOf({ root: top, commonDir: repo.commonDir, branch });
-  const data = { ...repo, cwdWorktree: top, linked, branch, head, newBranchBase, pr, stack, worktreesDir: projectDir(repo) };
-  emit(args.flags.has("--json"), data, () => {
-    console.log(`project   ${repo.project}`);
-    console.log(`main      ${tilde(repo.mainRoot)}`);
-    console.log(`here      ${linked ? `linked worktree ${tilde(top)}` : "main checkout"}`);
-    console.log(`branch    ${branch ?? `detached@${head}`}`);
-    console.log(`default   ${repo.defaultBranch}`);
-    console.log(`target    ${target.branch} (${target.source}): ${target.evidence}`);
-    console.log(`new from  ${newBranchBase}`);
-    console.log(`pr        ${pr ? `#${pr.number} -> ${pr.base}${pr.isDraft ? " (draft)" : ""}  ${pr.url}` : "none open"}`);
-    if (stack) console.log(`stack     ${stack.number ? `#${stack.number} ` : ""}${stack.trunk} <- ${stack.branches.join(" <- ")} (parent ${stack.parent})`);
-    console.log(`worktrees ${tilde(projectDir(repo))}`);
-  });
-}
-
-async function openPrFor(repo: Repo, branch: string): Promise<Pr | null> {
-  if (!(await github(repo)).slug) return null;
-  const r = await ghExec(repo, ["pr", "list", "--head", branch, "--state", "open", "--limit", "1", "--json", "number,state,url,isDraft,baseRefName"]);
-  if (r.code !== 0) {
-    warn(`gh pr list failed: ${firstLine(r.err)}`);
-    return null;
-  }
-  const p = (JSON.parse(r.out) as (Pr & { baseRefName: string })[])[0];
-  return p ? { number: p.number, state: p.state, url: p.url, isDraft: p.isDraft, base: p.baseRefName } : null;
-}
-
-async function target(args: Args) {
-  allowFlags(args, []);
-  const repo = await currentRepo();
-  const t = await integrationTarget(repo);
-  const newBranchBase = await newWorkBase(repo);
-  emit(args.flags.has("--json"), { ...t, defaultBranch: repo.defaultBranch, newBranchBase, github: (await github(repo)).slug }, () => {
-    console.log(`${t.branch} (${t.source})`);
-    console.log(`  ${t.evidence}`);
-    console.log(`  new branches start from ${newBranchBase}`);
-  });
-}
-
 // ---------- ls ----------
 
 async function fetchPrs(repo: Repo): Promise<Map<string, Pr> | null> {
@@ -577,7 +514,7 @@ function findEnvFiles(root: string): string[] {
   return found;
 }
 
-export type EnvSync = {
+type EnvSync = {
   missing: string[];
   copied: string[];
   same: string[];
@@ -585,13 +522,13 @@ export type EnvSync = {
   overwritten: { file: string; backup: string }[];
   extra: string[];
 };
-export type EnvMode = "check" | "copy" | "overwrite";
+type EnvMode = "check" | "copy" | "overwrite";
 
 // Works by path only: copies with copyFile and compares with `cmp`, so contents never enter this process or its output.
 // check writes nothing; copy fills in missing files and only reports ones that differ; overwrite also replaces those,
 // moving the old copy under `backupDir`, which must sit outside the working tree so it can never be committed.
 // `extra` lists env files the target has and the source lacks.
-export function syncEnv(from: string, to: string, mode: EnvMode = "copy", backupDir?: string): EnvSync {
+function syncEnv(from: string, to: string, mode: EnvMode = "copy", backupDir?: string): EnvSync {
   if (mode === "overwrite" && !backupDir) throw new Error("overwrite needs a backup dir");
   const res: EnvSync = { missing: [], copied: [], same: [], differs: [], overwritten: [], extra: [] };
   const sourceFiles = findEnvFiles(from);
@@ -631,8 +568,8 @@ function printEnv(r: EnvSync, indent = "  ") {
   line("differs", r.differs);
   line("overwritten", r.overwritten.map((o) => o.file));
   line("only here", r.extra);
-  if (r.missing.length) console.log(`${indent}br env copies the missing files`);
-  if (r.differs.length) console.log(`${indent}files that differ were left alone; br env --overwrite replaces them with the source's copy`);
+  if (r.missing.length) console.log(`${indent}wt env copies the missing files`);
+  if (r.differs.length) console.log(`${indent}files that differ were left alone; wt env --overwrite replaces them with the source's copy`);
 }
 
 const worktreeGitDir = async (dir: string) => git(dir, "rev-parse", "--path-format=absolute", "--git-dir");
@@ -642,9 +579,11 @@ async function recordEnvSource(dir: string, source: string) {
 }
 
 // The checkout a worktree takes its env files from: the one it was spawned from (recorded at creation or by
-// `br env --from`), else the main checkout.
+// `wt env --from`), else the main checkout.
 async function envSourceFor(dir: string, repo: Repo): Promise<{ path: string; how: string }> {
   const f = join(await worktreeGitDir(dir), ENV_SOURCE_FILE);
+  const legacy = join(dirname(f), LEGACY_ENV_SOURCE_FILE);
+  if (!existsSync(f) && existsSync(legacy)) renameSync(legacy, f);
   const recorded = existsSync(f) ? readFileSync(f, "utf8").trim() : "";
   if (recorded && real(recorded) !== real(dir)) {
     if (existsSync(recorded)) return { path: recorded, how: "spawned from" };
@@ -679,69 +618,13 @@ async function install(dir: string) {
   return { ran: true, ok: true, command, codegen: { script, ok: g.code === 0 } };
 }
 
-const NEW_USAGE =
-  "usage: br new <branch> --here|--worktree [--base <ref>] [--name <dir>] [--no-install] | br new --worktree --detach <ref> [--name <dir>]";
+const NEW_USAGE = "usage: wt new <branch> [--base <ref>] [--name <dir>] [--no-install] | wt new --detach <ref> --name <dir> [--no-install]";
 
-async function newBranch(args: Args) {
-  allowFlags(args, ["--here", "--worktree", "--base", "--name", "--detach", "--no-install"]);
-  if (args.flags.has("--here") === args.flags.has("--worktree"))
-    throw new UserError("pass exactly one of --here (switch this checkout) or --worktree (new folder under ~/worktrees)");
+async function newWorktree(args: Args) {
+  allowFlags(args, ["--base", "--name", "--detach", "--no-install"]);
   const branch = args.pos[0];
   if (branch && (await gitOk(process.cwd(), "check-ref-format", "--branch", branch)) === null)
     throw new UserError(`invalid branch name: ${branch}`);
-  return args.flags.has("--here") ? newHere(args) : newWorktree(args);
-}
-
-// Status lines go to stdout (like rm's refusals) so the user can see what blocks the switch.
-function refuseDirty(json: boolean, data: Record<string, unknown>, status: string[], what: string): never {
-  const reason = `${status.length} uncommitted change(s) in ${tilde(process.cwd())}; commit or stash them before ${what}`;
-  emit(json, { ...data, refused: true, reason, status: status.slice(0, 30) }, () => {
-    console.log(`refused: ${reason}`);
-    for (const l of status.slice(0, 30)) console.log(`  ${l}`);
-  });
-  process.exit(1);
-}
-
-async function newHere(args: Args) {
-  for (const f of ["--name", "--detach", "--no-install"]) if (args.flags.has(f)) throw new UserError(`${f} only applies with --worktree`);
-  const branch = args.pos[0];
-  if (!branch) throw new UserError(NEW_USAGE);
-  const base = args.flags.get("--base") as string | undefined;
-  const json = args.flags.has("--json");
-  const repo = await currentRepo();
-  const cwd = process.cwd();
-  const top = await git(cwd, "rev-parse", "--show-toplevel");
-  const show = (action: string, from: string | null) =>
-    emit(json, { action, project: repo.project, path: top, branch, from }, () => {
-      console.log(`${action} ${branch} in ${tilde(top)}`);
-      if (from) console.log(`  from ${from}`);
-      if (action === "created") console.log(`  no upstream yet; the first push is: br push`);
-    });
-
-  if ((await git(cwd, "branch", "--show-current")) === branch) return show("already on", null);
-  const status = (await git(cwd, "status", "--porcelain")).split("\n").filter(Boolean);
-  if (status.length) refuseDirty(json, { action: "refused", branch, path: top }, status, `switching to ${branch}`);
-  await fetchOrigin(repo);
-
-  if (await refExists(repo.mainRoot, `refs/heads/${branch}`)) {
-    if (base) warn(`--base ignored: branch ${branch} already exists locally`);
-    await git(cwd, "switch", branch);
-    return show("switched to", "existing local branch");
-  }
-  if (repo.hasOrigin && (await refExists(repo.mainRoot, `refs/remotes/origin/${branch}`))) {
-    if (base) warn(`--base ignored: branch ${branch} exists on origin`);
-    await git(cwd, "switch", "--track", "-c", branch, `origin/${branch}`);
-    return show("switched to", `origin/${branch} (tracking)`);
-  }
-  const start = base ?? (await newWorkBase(repo));
-  if ((await gitOk(cwd, "rev-parse", "--verify", "--quiet", `${start}^{commit}`)) === null) throw new UserError(`unknown base ref: ${start}`);
-  // --no-track: a new branch must not inherit the base as its push target.
-  await git(cwd, "switch", "--no-track", "-c", branch, start);
-  show("created", `${start} (new branch)`);
-}
-
-async function newWorktree(args: Args) {
-  const branch = args.pos[0];
   const detach = args.flags.get("--detach") as string | undefined;
   const base = args.flags.get("--base") as string | undefined;
   if (!branch && !detach) throw new UserError(NEW_USAGE);
@@ -776,7 +659,7 @@ async function newWorktree(args: Args) {
       console.log(`\nopen a new terminal and run:\n  ${data.next}`);
     });
     if (inst && !inst.ok) {
-      console.error(`br: install failed in ${tilde(dir)}; worktree kept`);
+      console.error(`wt: install failed in ${tilde(dir)}; worktree kept`);
       process.exit(1);
     }
   };
@@ -788,7 +671,7 @@ async function newWorktree(args: Args) {
         `${branch} is checked out in the main checkout ${tilde(repo.mainRoot)}; use a new branch with --name, or --detach ${branch}`,
       );
     if (existing) {
-      if (!existsSync(existing.path)) throw new UserError(`${branch} is registered at missing ${tilde(existing.path)}; run: br prune`);
+      if (!existsSync(existing.path)) throw new UserError(`${branch} is registered at missing ${tilde(existing.path)}; run: wt prune`);
       return done("reused", existing.path);
     }
   }
@@ -798,7 +681,7 @@ async function newWorktree(args: Args) {
     if (detach) return done("reused", dir);
     throw new UserError(`${tilde(dir)} already holds ${atDir.branch ?? `detached@${atDir.head.slice(0, 8)}`}; pick another --name`);
   }
-  if (existsSync(dir)) throw new UserError(`${tilde(dir)} exists but is not a registered worktree (orphan); inspect it, then: br rm ${dir} --force`);
+  if (existsSync(dir)) throw new UserError(`${tilde(dir)} exists but is not a registered worktree (orphan); inspect it, then: wt rm ${dir} --force`);
 
   mkdirSync(dirname(dir), { recursive: true });
   let from: string;
@@ -840,7 +723,7 @@ async function env(args: Args) {
   if (args.pos[0]) {
     const t = await resolveTarget(args.pos[0], here);
     if (!t.repo || !t.entry) throw new UserError(`${tilde(t.path)} is not a registered worktree`);
-    if (!existsSync(t.path)) throw new UserError(`${tilde(t.path)} is registered but missing; run: br prune`);
+    if (!existsSync(t.path)) throw new UserError(`${tilde(t.path)} is registered but missing; run: wt prune`);
     path = t.path;
     repo = t.repo;
   } else {
@@ -849,7 +732,7 @@ async function env(args: Args) {
     repo = here;
   }
   if (real(path) === real(repo.mainRoot))
-    throw new UserError(`${tilde(path)} is the main checkout, the default env source; run br env in a worktree or name one`);
+    throw new UserError(`${tilde(path)} is the main checkout, the default env source; run wt env in a worktree or name one`);
 
   let source: { path: string; how: string };
   const fromArg = args.flags.get("--from");
@@ -863,7 +746,7 @@ async function env(args: Args) {
   } else source = await envSourceFor(path, repo);
   if (real(source.path) === real(path)) throw new UserError(`${tilde(path)} cannot be its own env source`);
 
-  const backupDir = join(await worktreeGitDir(path), "br-env-backup", new Date().toISOString().replace(/[:.]/g, "-"));
+  const backupDir = join(await worktreeGitDir(path), "wt-env-backup", new Date().toISOString().replace(/[:.]/g, "-"));
   const r = syncEnv(source.path, path, check ? "check" : overwrite ? "overwrite" : "copy", backupDir);
   // --from becomes the remembered source once it is used for a real sync.
   if (!check && source.how === "--from") {
@@ -943,7 +826,7 @@ async function processesUsing(path: string): Promise<string[]> {
 
 // An orphan folder is deleted only when it is a real directory exactly <project>/<name> below the real
 // worktrees root and not a repository of its own (a worktree has a .git file, a clone a .git directory).
-export function orphanRefusal(path: string, root = WT_ROOT): string | null {
+function orphanRefusal(path: string, root = WT_ROOT): string | null {
   const st = lstatSync(path, { throwIfNoEntry: false });
   if (!st) return `${tilde(path)} does not exist`;
   if (st.isSymbolicLink()) return `${tilde(path)} is a symlink; refusing to delete it or its target`;
@@ -959,7 +842,7 @@ export function orphanRefusal(path: string, root = WT_ROOT): string | null {
 }
 
 // Removes the now-empty folders above a deleted worktree, stopping strictly below the worktrees root.
-export function removeEmptyParents(path: string, root = WT_ROOT) {
+function removeEmptyParents(path: string, root = WT_ROOT) {
   const top = real(root);
   for (let d = real(dirname(path)); within(d, top) && d !== top; d = dirname(d)) {
     try {
@@ -1018,7 +901,7 @@ async function rmOne(arg: string, here: Repo | null, force: boolean, deleteBranc
 
 async function rm(args: Args) {
   allowFlags(args, ["--force", "--delete-branch"]);
-  if (args.pos.length === 0) throw new UserError("usage: br rm <name|path>... [--force] [--delete-branch]");
+  if (args.pos.length === 0) throw new UserError("usage: wt rm <name|path>... [--force] [--delete-branch]");
   const here = (await gitOk(process.cwd(), "rev-parse", "--git-dir")) !== null ? await loadRepo(process.cwd()) : null;
   const results: Record<string, unknown>[] = [];
   for (const a of args.pos) results.push(await rmOne(a, here, args.flags.has("--force"), args.flags.has("--delete-branch")));
@@ -1082,393 +965,24 @@ async function prune(args: Args) {
     ]);
     for (const l of table(["WORKTREE", "BRANCH", "DIRTY", "REASONS"], body)) console.log(l);
     console.log(`\ndry run, nothing removed. To remove after confirming:`);
-    console.log(`  br rm ${candidates.map((c) => c.path).join(" ")} [--delete-branch] [--force]`);
+    console.log(`  wt rm ${candidates.map((c) => c.path).join(" ")} [--delete-branch] [--force]`);
   });
 }
 
-// ---------- push ----------
-
-type PushResult = { branch: string; remote: string; upToDate: boolean; forced: boolean };
-
-// Never --force. --force-with-lease only when the caller passes it after the user agreed.
-async function pushBranch(repo: Repo, branch: string, lease: boolean): Promise<PushResult> {
-  if (!repo.hasOrigin) throw new UserError("no origin remote to push to");
-  if (!(await refExists(repo.mainRoot, `refs/heads/${branch}`))) throw new UserError(`no local branch ${branch}`);
-  const t = await integrationTarget(repo);
-  if (branch === repo.defaultBranch || branch === t.branch)
-    throw new UserError(`refusing to push ${branch}: it is the default branch or integration target; push a work branch`);
-  const r = await exec(["git", "push", "--no-verify", "-u", ...(lease ? ["--force-with-lease"] : []), "origin", branch], repo.mainRoot);
-  if (r.code !== 0) {
-    if (lease && /stale info/.test(r.err))
-      throw new UserError(`force-with-lease refused: origin/${branch} moved since the last fetch; fetch and review it before retrying`);
-    if (/\[rejected\]|non-fast-forward|fetch first/.test(r.err))
-      throw new UserError(
-        `push of ${branch} rejected (non-fast-forward): origin/${branch} has commits this branch lacks; integrate them, or with the user's explicit consent rerun with --force-with-lease`,
-      );
-    const reason = r.err.split("\n").find((l) => /^(error|fatal|remote):/.test(l.trim())) ?? firstLine(r.err);
-    throw new UserError(`push of ${branch} failed: ${reason.trim()}`);
-  }
-  return { branch, remote: "origin", upToDate: /Everything up-to-date/.test(r.err), forced: lease };
-}
-
-async function push(args: Args) {
-  allowFlags(args, ["--force-with-lease"]);
-  const repo = await currentRepo();
-  const branch = args.pos[0] ?? ((await git(process.cwd(), "branch", "--show-current")) || null);
-  if (!branch) throw new UserError("detached HEAD; pass the branch: br push <branch>");
-  const r = await pushBranch(repo, branch, args.flags.has("--force-with-lease"));
-  emit(args.flags.has("--json"), r, () =>
-    console.log(`${r.upToDate ? "up to date" : r.forced ? "force-pushed (with lease)" : "pushed"} ${branch} -> origin/${branch} (upstream set)`),
-  );
-}
-
-// ---------- name ----------
-
-// Lowercase words joined by dashes, cut at a word boundary within 50 characters.
-export function slugify(s: string) {
-  const full = s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  if (full.length <= 50) return full;
-  const cut = full.slice(0, 51).lastIndexOf("-");
-  return cut > 0 ? full.slice(0, cut) : full.slice(0, 50);
-}
-
-// Suggests <prefix>/<ticket>-<slug> from the repo's recent branch names. Never creates anything.
-export function suggestName(type: string, desc: string, ticket: string | null, recent: string[]) {
-  const options = BRANCH_TYPES[type];
-  if (!options) throw new UserError(`--type must be one of ${Object.keys(BRANCH_TYPES).join(", ")}`);
-  const slug = slugify(desc);
-  if (!slug) throw new UserError("--desc needs at least one letter or digit");
-  const evidence: string[] = [];
-  const counts = options.map((o) => ({ prefix: o, count: recent.filter((b) => b.startsWith(`${o}/`)).length }));
-  const best = counts.reduce((a, b) => (b.count > a.count ? b : a));
-  evidence.push(
-    best.count
-      ? `prefix ${best.prefix}/: ${counts.map((c) => `${c.prefix}/ ${c.count}`).join(", ")} of ${recent.length} recent branches`
-      : `no recent ${options.map((o) => `${o}/`).join(" or ")} branches; using the conventional ${best.prefix}/`,
-  );
-
-  let key = "";
-  if (ticket) {
-    const ticketed = recent.map((b) => ({ b, m: b.match(BRANCH_TICKET_RE)?.[1] })).filter((x): x is { b: string; m: string } => !!x.m);
-    const lower = ticketed.filter((x) => x.m === x.m.toLowerCase());
-    const useLower = ticketed.length === 0 || lower.length * 2 >= ticketed.length;
-    key = `${useLower ? ticket.toLowerCase() : ticket.toUpperCase()}-`;
-    const sample = (useLower ? lower : ticketed.filter((x) => x.m !== x.m.toLowerCase()))[0]?.b;
-    evidence.push(
-      ticketed.length
-        ? `ticket: ${useLower ? lower.length : ticketed.length - lower.length} of ${ticketed.length} ticketed branches put a ${useLower ? "lowercase" : "uppercase"} key right after the prefix${sample ? ` (e.g. ${sample})` : ""}`
-        : "no recent branch carries a ticket key after its prefix; using a lowercase key",
-    );
-  }
-  return { name: `${best.prefix}/${key}${slug}`, evidence };
-}
-
-async function name(args: Args) {
-  allowFlags(args, ["--type", "--desc", "--ticket"]);
-  const type = args.flags.get("--type");
-  const desc = args.flags.get("--desc");
-  const ticket = args.flags.get("--ticket");
-  if (typeof type !== "string" || typeof desc !== "string")
-    throw new UserError(`usage: br name --type <${Object.keys(BRANCH_TYPES).join("|")}> --desc "<words>" [--ticket KEY-123]`);
-  if (ticket !== undefined && (typeof ticket !== "string" || !/^[A-Za-z]{2,10}-\d+$/.test(ticket)))
-    throw new UserError(`--ticket must look like KEY-123, got "${ticket}"`);
-  const repo = await currentRepo();
-  const gh = await github(repo);
-  if (!gh.conventions) warn(`repo conventions unavailable (${gh.error}); suggesting from defaults`);
-  const recent = gh.conventions?.recentBranches ?? [];
-  const s = suggestName(type, desc, ticket ?? null, recent);
-  if (ticket && gh.conventions) {
-    const tp = gh.conventions.ticketPrefixes.find((p) => p.prefix === ticket.split("-")[0]!.toUpperCase());
-    s.evidence.push(
-      tp ? `${tp.prefix} appears in ${tp.count} recent PRs` : `${ticket.split("-")[0]!.toUpperCase()} is not among recent ticket prefixes (${gh.conventions.ticketPrefixes.map((p) => p.prefix).join(", ") || "none"})`,
-    );
-  }
-  const exists = (await refExists(repo.mainRoot, `refs/heads/${s.name}`))
-    ? "local"
-    : repo.hasOrigin && (await refExists(repo.mainRoot, `refs/remotes/origin/${s.name}`))
-      ? "origin"
-      : null;
-  if (exists) warn(`${s.name} already exists (${exists})`);
-  emit(args.flags.has("--json"), { ...s, exists, recentSamples: recent.slice(0, 5) }, () => {
-    console.log(s.name);
-    for (const e of s.evidence) console.log(`  ${e}`);
-    console.log(`  suggestion only; confirm the name, then: br new ${s.name} --here|--worktree`);
-  });
-}
-
-// ---------- stack ----------
-
-type PlanLayer = { name: string; title: string };
-type Plan = { base?: string; branches: PlanLayer[] };
-export type LayerState = { name: string; pr: { number: number; state: string } | null; hasCommits: boolean };
-
-export function parsePlan(raw: unknown): Plan {
-  const bad = (m: string) => new UserError(`invalid plan: ${m}`);
-  if (!raw || typeof raw !== "object") throw bad("expected a JSON object");
-  const { base, branches } = raw as Record<string, unknown>;
-  if (base !== undefined && (typeof base !== "string" || !base)) throw bad("base must be a non-empty string");
-  if (!Array.isArray(branches) || branches.length === 0) throw bad("branches must be a non-empty array");
-  const seen = new Set<string>();
-  const layers = branches.map((b, i) => {
-    const { name, title } = (b ?? {}) as Record<string, unknown>;
-    if (typeof name !== "string" || !name) throw bad(`branches[${i}].name must be a non-empty string`);
-    if (typeof title !== "string" || !title.trim()) throw bad(`branches[${i}].title must be a non-empty string`);
-    if (!PREFIXES.has(name.split("/")[0]!) || !name.includes("/"))
-      throw bad(`${name} lacks a conventional prefix (${[...PREFIXES].map((p) => `${p}/`).join(", ")})`);
-    if (seen.has(name)) throw bad(`${name} appears twice`);
-    seen.add(name);
-    return { name, title: title.trim() };
-  });
-  return { ...(base ? { base } : {}), branches: layers };
-}
-
-// Which layers get a draft PR now. Bottom-up and contiguous: a layer waits while the one below has no
-// PR. A layer needs commits (GitHub refuses empty PRs), and new PRs plus the user's open ones stay
-// within the cap.
-export function planPrs(layers: LayerState[], openCount: number, cap: number) {
-  let room = Math.max(0, cap - openCount);
-  const open: string[] = [];
-  const waiting: { name: string; reason: string }[] = [];
-  let blockedBy: string | null = null;
-  for (const l of layers) {
-    if (l.pr && l.pr.state !== "CLOSED") continue;
-    if (blockedBy) waiting.push({ name: l.name, reason: blockedBy });
-    else if (!l.hasCommits) {
-      waiting.push({ name: l.name, reason: "no commits yet" });
-      blockedBy = `layer below (${l.name}) has no PR yet`;
-    } else if (room === 0) {
-      waiting.push({ name: l.name, reason: `open-PR cap ${cap} reached (${openCount} open + ${open.length} new)` });
-      blockedBy = `open-PR cap ${cap} reached`;
-    } else {
-      open.push(l.name);
-      room--;
-    }
-  }
-  return { open, waiting };
-}
-
-type Step = { cmd: string[]; why: string };
-
-async function stack(args: Args) {
-  if (args.pos[0] === "status") return stackStatus(args);
-  allowFlags(args, ["--draft-prs", "--cap", "--dry-run"]);
-  const file = args.pos[0];
-  if (!file) throw new UserError("usage: br stack <plan.json> [--draft-prs] [--cap <n>] [--dry-run] | br stack status");
-  let raw: unknown;
-  try {
-    raw = JSON.parse(readFileSync(file, "utf8"));
-  } catch (e) {
-    throw new UserError(`cannot read plan ${file}: ${firstLine((e as Error).message)}`);
-  }
-  const plan = parsePlan(raw);
-  const draftPrs = args.flags.has("--draft-prs");
-  const capRaw = args.flags.get("--cap");
-  if (capRaw !== undefined && !draftPrs) throw new UserError("--cap only applies with --draft-prs");
-  const cap = capRaw === undefined ? DEFAULT_PR_CAP : Number(capRaw);
-  if (!Number.isInteger(cap) || cap < 0) throw new UserError("--cap needs a whole number >= 0");
-  const dry = args.flags.has("--dry-run");
-  const json = args.flags.has("--json");
-
-  const repo = await currentRepo();
-  if (!repo.hasOrigin) throw new UserError("no origin remote; a stack needs one to push to");
-  const cwd = process.cwd();
-  const top = await git(cwd, "rev-parse", "--show-toplevel");
-  const names = plan.branches.map((b) => b.name);
-  for (const n of names) if ((await gitOk(cwd, "check-ref-format", "--branch", n)) === null) throw new UserError(`invalid branch name: ${n}`);
-  const t = plan.base ? null : await integrationTarget(repo);
-  const base = plan.base ?? t!.branch;
-  const baseWhy = t ? `integration target (${t.source}): ${t.evidence}` : "from the plan";
-
-  // Read-only state: remote heads, the local gh stack, local branches.
-  const remote = new Map(
-    (await git(repo.mainRoot, "ls-remote", "--heads", "origin", ...[base, ...names].map((n) => `refs/heads/${n}`)))
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => {
-        const [sha, ref] = l.split("\t");
-        return [ref!.replace(/^refs\/heads\//, ""), sha!] as const;
-      }),
-  );
-  if (!remote.has(base)) throw new UserError(`origin has no branch ${base}`);
-  const inStack = (n: string) => stackOf({ root: top, commonDir: repo.commonDir, branch: n });
-  const existing = names.map(inStack).find((s) => s !== null) ?? null;
-  let done = 0;
-  if (existing) {
-    const prefixOk = existing.branches.length <= names.length && existing.branches.every((b, i) => b === names[i]);
-    if (!prefixOk || existing.trunk !== base)
-      throw new UserError(
-        `plan conflicts with the existing gh stack ${existing.trunk} <- ${existing.branches.join(" <- ")}; the plan must start with the same layers on ${base}`,
-      );
-    done = existing.branches.length;
-  }
-  const local = new Set<string>();
-  for (const n of names) if (await refExists(repo.mainRoot, `refs/heads/${n}`)) local.add(n);
-  for (const n of names.slice(done)) {
-    if (inStack(n)) throw new UserError(`${n} already belongs to another gh stack`);
-    if (remote.has(n)) throw new UserError(`${n} already exists on origin and is not in this stack; pick another name`);
-    if (done > 0 && local.has(n)) throw new UserError(`local branch ${n} exists outside the stack; rename the layer or delete the branch`);
-  }
-  const status = (await git(cwd, "status", "--porcelain")).split("\n").filter(Boolean);
-
-  const steps: Step[] = [{ cmd: ["git", "fetch", "--prune", "--quiet", "origin"], why: "refresh origin" }];
-  if (done === 0) {
-    if (!local.has(names[0]!))
-      steps.push({ cmd: ["git", "branch", "--no-track", names[0]!, `origin/${base}`], why: `bottom layer starts from origin/${base}` });
-    steps.push({ cmd: ["gh", "stack", "init", "--base", base, ...names], why: "create the stack; checks out the top layer" });
-  } else if (done < names.length) {
-    steps.push({ cmd: ["git", "switch", names[done - 1]!], why: "resume on the current top layer" });
-    for (const n of names.slice(done)) steps.push({ cmd: ["gh", "stack", "add", n], why: "add the next layer on top" });
-  }
-  for (const n of names) steps.push({ cmd: ["git", "push", "--no-verify", "-u", "origin", n], why: "push the layer (never forced)" });
-
-  const layersOut = plan.branches.map((b, i) => ({
-    name: b.name,
-    title: b.title,
-    parent: i === 0 ? base : names[i - 1]!,
-    state: i < done ? "in stack" : local.has(b.name) ? "adopt local branch" : "new",
-  }));
-  const report = (extra: Record<string, unknown>, prLines: string[]) =>
-    emit(json, { dryRun: dry, base, baseWhy, layers: layersOut, steps: steps.map((s) => ({ ...s, cmd: s.cmd.join(" ") })), ...extra }, () => {
-      console.log(`stack on ${base} (${baseWhy})`);
-      layersOut.forEach((l, i) => console.log(`  ${i + 1}. ${l.name}  "${l.title}"  [${l.state}]`));
-      console.log(dry ? "\ndry run, nothing ran. Steps:" : "\nran:");
-      for (const s of steps) console.log(`  ${s.cmd.map((c) => (/[\s"]/.test(c) ? JSON.stringify(c) : c)).join(" ")}    # ${s.why}`);
-      for (const l of prLines) console.log(l);
-    });
-
-  if (status.length) {
-    if (!dry) refuseDirty(json, { action: "refused" }, status, "creating the stack (it switches branches)");
-    warn(`${status.length} uncommitted change(s): the real run will refuse until the tree is clean`);
-  }
-
-  if (draftPrs && !dry && !(await github(repo)).slug)
-    throw new UserError(`--draft-prs needs GitHub (${(await github(repo)).error}); nothing ran. Rerun without --draft-prs to create and push the stack only`);
-  if (!dry) {
-    for (const s of steps) {
-      if (s.cmd[0] === "git" && s.cmd[1] === "push") await pushBranch(repo, s.cmd.at(-1)!, false);
-      else {
-        const r = await exec(s.cmd, cwd, s.cmd[0] === "gh" ? (await github(repo)).env : undefined);
-        if (r.code !== 0) throw new UserError(`${s.cmd.slice(0, 3).join(" ")} failed (exit ${r.code}): ${firstLine(r.err) || firstLine(r.out)}`);
-      }
-    }
-  }
-  if (!draftPrs) return report({}, []);
-
-  // Draft PRs: read-only lookups, then gh pr create per layer within the cap.
-  const gh = await github(repo);
-  let prs: Map<string, Pr> | null = null;
-  let openCount = 0;
-  if (gh.slug) {
-    prs = await fetchPrs(repo);
-    const mine = await ghExec(repo, ["pr", "list", "--author", "@me", "--state", "open", "--limit", "200", "--json", "number"]);
-    if (mine.code === 0) openCount = (JSON.parse(mine.out) as unknown[]).length;
-    else prs = null;
-  }
-  if (!prs) {
-    if (!dry) throw new UserError(`cannot read PR state (gh pr list failed); the stack is pushed, no PRs opened`);
-    warn(`PR state unavailable (${gh.error ?? "gh pr list failed"}); assuming 0 open PRs and no existing layer PRs`);
-  }
-  const layers: LayerState[] = [];
-  for (const [i, n] of names.entries()) {
-    const parentRef = i === 0 ? `origin/${base}` : names[i - 1]!;
-    const exists = await refExists(repo.mainRoot, `refs/heads/${n}`);
-    const ahead = exists ? await gitOk(repo.mainRoot, "rev-list", "--count", `${parentRef}..${n}`) : null;
-    const pr = prs?.get(n);
-    layers.push({ name: n, pr: pr ? { number: pr.number, state: pr.state } : null, hasCommits: Number(ahead ?? 0) > 0 });
-  }
-  const decision = planPrs(layers, openCount, cap);
-  // A merged layer's branch may be gone; base each new PR on the nearest unmerged layer below.
-  const prBase = (i: number) => {
-    for (let j = i - 1; j >= 0; j--) if (layers[j]!.pr?.state !== "MERGED") return names[j]!;
-    return base;
-  };
-  const opened: { name: string; url: string }[] = [];
-  const prSteps = decision.open.map((n) => {
-    const i = names.indexOf(n);
-    const cmd = ["gh", "pr", "create", "--draft", "--base", prBase(i), "--head", n, "--title", plan.branches[i]!.title, "--body", `Layer ${i + 1} of ${names.length} in a stack on ${base}.`];
-    return { name: n, cmd, why: "open a draft PR" };
-  });
-  const allHavePrs = layers.every((l) => (l.pr && l.pr.state !== "CLOSED") || decision.open.includes(l.name));
-  const linkStep = allHavePrs && layers.length > 1 ? { cmd: ["gh", "stack", "link", "--base", base, ...names.filter((_, i) => layers[i]!.pr?.state !== "MERGED")], why: "link the PRs as a stack on GitHub (non-force push, keeps drafts)" } : null;
-  steps.push(...prSteps.map(({ cmd, why }) => ({ cmd, why })), ...(linkStep ? [linkStep] : []));
-  let linkWarning: string | null = null;
-  if (!dry) {
-    for (const s of prSteps) {
-      const r = await exec(s.cmd, cwd, gh.env);
-      if (r.code !== 0) throw new UserError(`gh pr create for ${s.name} failed: ${firstLine(r.err)} (opened so far: ${opened.map((o) => o.url).join(", ") || "none"})`);
-      opened.push({ name: s.name, url: firstLine(r.out) });
-    }
-    if (linkStep) {
-      const r = await exec(linkStep.cmd, cwd, gh.env);
-      if (r.code === 9) linkWarning = "stacked PRs are not enabled on this repo; the drafts stay unlinked";
-      else if (r.code !== 0) linkWarning = `gh stack link failed (exit ${r.code}): ${firstLine(r.err)}`;
-      if (linkWarning) warn(linkWarning);
-    }
-  }
-  const prLines = [
-    `\nPRs: ${openCount} open by you, cap ${cap}${prs ? "" : " (PR state unavailable)"}`,
-    ...layers.filter((l) => l.pr && l.pr.state !== "CLOSED").map((l) => `  ${l.name}: #${l.pr!.number} ${l.pr!.state.toLowerCase()}`),
-    ...(dry ? decision.open.map((n) => `  ${n}: would open a draft PR`) : opened.map((o) => `  ${o.name}: opened draft ${o.url}`)),
-    ...decision.waiting.map((w) => `  ${w.name}: waiting (${w.reason}); pushed, no PR. Rerun later to open it.`),
-    ...(linkStep ? [] : [`  stack link on GitHub waits until every layer has a PR`]),
-  ];
-  report({ openCount, cap, toOpen: decision.open, opened, waiting: decision.waiting, linked: !!linkStep && !dry && !linkWarning }, prLines);
-}
-
-async function stackStatus(args: Args) {
-  allowFlags(args, []);
-  const repo = await currentRepo();
-  const top = await git(process.cwd(), "rev-parse", "--show-toplevel");
-  const branch = args.pos[1] ?? ((await git(process.cwd(), "branch", "--show-current")) || null);
-  if (!branch) throw new UserError("detached HEAD; pass a branch: br stack status <branch>");
-  const s = stackOf({ root: top, commonDir: repo.commonDir, branch });
-  if (!s) throw new UserError(`${branch} is not in a gh stack`);
-  const prs = await fetchPrs(repo);
-  const trunkRef = (await refExists(repo.mainRoot, `refs/remotes/origin/${s.trunk}`)) ? `origin/${s.trunk}` : s.trunk;
-  const layers = await Promise.all(
-    s.branches.map(async (b, i) => {
-      const parent = i === 0 ? trunkRef : s.branches[i - 1]!;
-      const counts = (await gitOk(repo.mainRoot, "rev-list", "--left-right", "--count", `${parent}...${b}`))?.split(/\s+/).map(Number);
-      const pr = prs?.get(b) ?? null;
-      return { branch: b, parent, behind: counts?.[0] ?? null, ahead: counts?.[1] ?? null, pr };
-    }),
-  );
-  emit(args.flags.has("--json"), { trunk: s.trunk, number: s.number, current: branch, layers }, () => {
-    console.log(`stack${s.number ? ` #${s.number}` : ""} on ${s.trunk}`);
-    const body = layers.map((l, i) => [
-      String(i + 1),
-      `${l.branch}${l.branch === branch ? " *" : ""}`,
-      l.parent,
-      l.ahead === null ? "-" : `+${l.ahead}/-${l.behind}`,
-      l.pr ? `#${l.pr.number} ${l.pr.state === "OPEN" && l.pr.isDraft ? "draft" : l.pr.state.toLowerCase()}` : "-",
-    ]);
-    for (const l of table(["#", "BRANCH", "PARENT", "+/- PARENT", "PR"], body)) console.log(`  ${l}`);
-  });
-}
-
-const USAGE = `usage: br <command> [--json]
-  where                                   repo, current worktree and branch, integration target, open PR, gh stack
-  target                                  integration target for new work, with evidence
-  name --type <type> --desc "<words>" [--ticket KEY-123]
-                                          suggest a branch name from the repo's conventions (creates nothing)
-                                          types: ${Object.keys(BRANCH_TYPES).join(", ")}
-  new <branch> --here [--base <ref>]      create or switch to a branch in this checkout (clean tree only)
-  new <branch> --worktree [--base <ref>] [--name <dir>] [--no-install]
-  new --worktree --detach <ref> [--name <dir>] [--no-install]
+const USAGE = `usage: wt <command> [--json]
+  new <branch> [--base <ref>] [--name <dir>] [--no-install]
+                                          worktree for a branch under ~/worktrees/<project>/<name>
+  new --detach <ref> --name <dir> [--no-install]
+                                          scratch checkout of a commit
   env [<name|branch|path>] [--from <name|branch|path>] [--check | --overwrite]
                                           sync .env* files (names only, values never read) from the checkout the
                                           worktree was spawned from, else the main checkout: copy missing, report
                                           differing; --check writes nothing; --overwrite replaces differing files,
                                           keeping old copies in the worktree's git dir; --from picks the source
                                           and remembers it
-  push [<branch>] [--force-with-lease]    git push -u origin <branch> --no-verify; never --force
   ls [--all] [--pr]                       worktrees for this project (--all: every project + orphans)
   rm <name|path>... [--force] [--delete-branch]
-  prune [--merged] [--gone] [--stale <days>] [--orphans] [--all]   dry run only
-  stack <plan.json> [--draft-prs] [--cap <n>] [--dry-run]
-                                          create or resume a gh stack from a plan, push every layer,
-                                          optionally open draft PRs within the open-PR cap (default ${DEFAULT_PR_CAP})
-  stack status [<branch>]                 layers, PRs, ahead/behind parent`;
+  prune [--merged] [--gone] [--stale <days>] [--orphans] [--all]   dry run only`;
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
@@ -1478,26 +992,16 @@ async function main() {
   }
   const args = parseArgs(rest);
   switch (cmd) {
-    case "where":
-      return where(args);
-    case "target":
-      return target(args);
-    case "name":
-      return name(args);
     case "new":
-      return newBranch(args);
+      return newWorktree(args);
     case "env":
       return env(args);
-    case "push":
-      return push(args);
     case "ls":
       return ls(args);
     case "rm":
       return rm(args);
     case "prune":
       return prune(args);
-    case "stack":
-      return stack(args);
     default:
       console.error(USAGE);
       process.exit(1);
@@ -1506,6 +1010,6 @@ async function main() {
 
 if (import.meta.main)
   main().catch((e) => {
-    console.error(`br: ${e instanceof UserError ? e.message : ((e as Error)?.message ?? e)}`);
+    console.error(`wt: ${e instanceof UserError ? e.message : ((e as Error)?.message ?? e)}`);
     process.exit(1);
   });

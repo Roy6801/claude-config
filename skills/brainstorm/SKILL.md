@@ -45,10 +45,10 @@ If the request is a question, a lookup, or a small fix, print one line such as `
 ## After approval
 
 1. **Tickets or issues**, every write shown and approved first. When Linear is connected, through the `ticket` skill, following the approved ticket plan (create only the new tickets and link the existing ones as the plan says): more than one PR gets a parent (the ticket the work came from, when there is one) and one child per PR, with `blockedBy` in ship order; one PR gets one ticket. Otherwise, when the user wants them, one GitHub issue per PR (`gh issue create`), linked to the issue the work came from when there is one. Without either, no ids anywhere.
-2. **Branch names**: `br name` for each PR (`--ticket` when it has a Linear ticket), each confirmed by the user.
+2. **Branch names**: named by the branching rule in CLAUDE.md for each PR (the Linear ticket's `gitBranchName` only when it has a Linear ticket), each confirmed by the user.
 3. **Ladder**: write the PR list as JSON in the initiative directory, shaped per `$CLAUDE_CONFIG_DIR/skills/pair/references/ladder.md`, then run `bun $CLAUDE_CONFIG_DIR/skills/pair/scripts/pair.ts plan save <file>`. One slice per PR in ship order with `title`, `goal`, `after`, `branch`, `ticket` (optional: a Linear key or an issue number such as `#412`), `acs`, `merge_point`, `milestone`, `est_days`, and `commits` holding only `n`, `title` and `why`. `acs` are `AC-<n>` from the spec, or `<TICKET>/AC-<n>` from a Linear ticket; when none are written yet, run `spec` first.
 4. **Roadmap**: write the same PR list into `roadmap.md` at the path `work.ts current` prints. It is the tracker everyone reads: `pair` keeps each PR's status and the "Next up" line current, and `handoff` and `work.ts` read them.
-5. **Stack**: with more than one PR, set it up through the `branch` skill (`br stack`, dry run shown and approved first). The open-PR cap is optional: when the user wants draft PRs opened now (`--draft-prs`), pass `--cap <n>` only when they set one (`br` falls back to 5, so pass a number above the PR count when they want none).
+5. **Stack**: with more than one PR, the ladder records the order and `ship` builds the gh stack layer by layer as each PR ships, with no up-front stack. Each PR is a self-contained layer (see `pair/references/ladder.md`).
 6. Log the decisions from the discussion that are not yet in `decisions.md`.
 7. End with one yes/no question: "Hand off to a fresh chat for PR 1, <name>?" On yes, run the `handoff` skill (its starter is `/pair plan <slug>`). On no, stop.
 

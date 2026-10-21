@@ -15,7 +15,7 @@ Act as a senior software engineer collaborating with a peer. Treat conversations
 
 ## How Work Flows
 
-- **Core: `/brainstorm`, `/pair`, `/handoff`. Strictly.** Every line of work (feature development, debugging, testing, review) runs through these three; every other skill (spec, debug, qa, review, ship, done, branch, scout, gather-context…) plugs into them and never replaces them. Questions, lookups and small fixes take the fast path: just do them.
+- **Core: `/brainstorm`, `/pair`, `/handoff`. Strictly.** Every line of work (feature development, debugging, testing, review) runs through these three; every other skill (spec, debug, qa, review, ship, done, worktree, scout, gather-context…) plugs into them and never replaces them. Questions, lookups and small fixes take the fast path: just do them.
   - `/brainstorm` first for anything non-trivial: map the problem to skills and agents, grill the ask (at least one "why" for XY problems), then present a roadmap for approval: milestones of shippable PRs in ship order, the smallest deliverable first, PRs that must go live together stacked, tickets or issues when available.
   - `/pair plan <slug>`, one PR per chat: plans the next unshipped PR in detail in plan mode (≤500 net lines), builds all its atomic commits without pausing, runs the checkpoint (simplify, review, green, QA), walks me through every commit in one message, and ships it after my OK.
   - `/handoff` after a roadmap is approved or a PR ships, so the next PR starts in a fresh chat; compact with a focus mid-discussion or mid-debug. State lives in `$CLAUDE_CONFIG_DIR/state/work/<slug>/`.
@@ -85,18 +85,16 @@ The main thread is the orchestrator and the dialogue with me: it holds decisions
 
 ## Git & GitHub
 
-- Use `/branch` (script `br`) for branches, worktrees, pushes and stacks — don't hand-roll git recipes
-- Multi-PR work is a gh stack. Its lifecycle (build one layer, rebase it on its parent, push, draft PR, then the next layer; sync, merge, cleanup) is in `/branch`. `gh stack merge <PR>` merges that layer and everything below it, so any layer can be the merge point and each layer must be self-contained
-- The default branch and the integration target always come from the remote (`br target`), never from a local `origin/HEAD`
-- Branches use a conventional prefix (`feature/`, `fix/`, `test/`, `docs/`, `poc/`, …); suggest a name with `br name` and let me confirm it
-- Push with `--no-verify` (the TypeScript pre-push hook runs out of memory) and never force-push without my explicit consent
+- **Worktrees go through the `worktree` skill. This is the default approach** for creating, listing, removing and pruning worktrees and syncing their env files; I open each one myself with the command it prints
+- **Branches** start from `origin/<integration target>` (`bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts target`, read from the remote) with a conventional prefix (`feature/`, `fix/`, `test/`, `docs/`, `poc/`, …), taken from the Linear ticket's branch name or the issue when there is one. I confirm the name, then `git fetch origin && git switch -c <branch> origin/<target>`
+- **Account first:** before the first commit or push in a repo each session, run `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts account`. When the active account is not the repo's, show me both and the switch command, and switch only after my OK (every session shares the active account). Commit as the repo's account with the `git -c user.name=… -c user.email=… commit` it prints; global `git config user.*` stays as it is
+- Push with `git push --no-verify -u origin <branch>` (the TypeScript pre-push hook runs out of memory); force-push only with my explicit consent
+- Multi-PR work is a gh stack that `/ship` builds layer by layer. `gh stack merge <PR>` merges that layer and everything below it, so any layer can be the merge point and each layer must be self-contained
 - **A PR body is a human-readable account of what the PR does**, never the output of checks (typecheck, lint, tests)
 - **Every PR body has an Evidence section** (screenshots or video for UI changes; otherwise output that shows the behavior itself), attached with `gh pr edit|create --attach` in the body, never a comment. I review every attachment before it is uploaded. Skip it only when I say so for that PR (`/ship` owns the flow)
 - PRs open as drafts assigned to me (`/ship`). They stay drafts and unmerged unless I explicitly ask; when I ask to make one ready for review or merge it, do it right away without re-confirming
 - Commits: Conventional title in plain language; body with Why, Added / Modified / Deleted, Alternatives, Deviation, Noticed, Checked with, ACs (`pair commit` writes it)
 - Default to `gh` for GitHub operations; `gh api <endpoint>` (with `--jq`) for anything not covered
-- **Multi-account:** for a repo owned by an inactive account, prefix commands with `GH_TOKEN=$(gh auth token --user <owner>)`; never `gh auth switch` (global state shared with other sessions). Never edit global `git config user.*`; use `git -c user.name=<handle> -c user.email=<email> commit …`. The no-reply email is `<id>+<login>@users.noreply.github.com` (`gh api user --jq '{login,id}'`)
-- Worktrees live at `~/worktrees/<project>/<name>/`; reuse existing ones; I open them myself with the command `br` prints
 
 ---
 
@@ -151,6 +149,6 @@ Workflows (what I start):
 - `/ticket` (Linear, only when connected)
 - `/skills` (third-party skill updates, refine queue), `/skill-retro`
 
-Shared capabilities: `gather-context` (cited context bundles; repo conventions), `scout` (research briefs), `branch` (`br`), `thermo` (maintainability rubric), `explain` (PR intent vs spec, ticket or issue), `post-pr-comments` (posting review comments and replies), `/simplify`.
+Shared capabilities: `gather-context` (cited context bundles; repo conventions), `scout` (research briefs), `worktree` (`wt`; worktrees and their env files), `thermo` (maintainability rubric), `explain` (PR intent vs spec, ticket or issue), `post-pr-comments` (posting review comments and replies), `/simplify`.
 
 Agents: `builder` (sonnet; one planned commit), `reviewer` (opus; structured findings), `tester` (opus; browser QA), `scout` (sonnet; research), `plan-griller` and `plan-annotator` (opus at high effort; fresh-context grill and per-commit notes in the pair plan gate).

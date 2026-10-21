@@ -7,18 +7,20 @@ The ladder is the machine record of a roadmap: `pair.json` in the initiative dir
 - `pair plan save <ladder.json>` stores a whole ladder (brainstorm, or a roadmap change).
 - `pair plan save <slice.json> --slice <n> --plan <plan.md>` stores one PR's approved plan: the file holds that one slice object (only the fields that change are needed; the rest come from the stored slice), the script copies the plan to `pr-<n>-plan.md`, sets `plan_file` and `plan_approved_at`, and holds the PR for this chat. It refuses until the PR's details are complete.
 
-Both validate, print one line per problem, and on success print a plan diff and rewrite `stack.json` (for `br stack`) and the status parts of `roadmap.md`.
+Both validate, print one line per problem, and on success print a plan diff and rewrite the status parts of `roadmap.md`.
 
 A re-save never loses work. Each new slice is matched to its stored slice by branch (by title when the branch was renamed), never by number, so inserting or moving a PR shifts nothing. From the stored slice it keeps the progress (status, timestamps, `pr`, `sessions`), the plan approval, and any detail field the new file leaves out (`test_script`, `budget`, `patterns`, `exceptions`, `green_check`, `merge_point`, `prefactor`, `why`). Commits match by title inside the slice and keep their done markers (`status`, `sha`, `done_at`) and any detail the new file leaves out (`files`, `check`, `est_lines`, `acs`). Extra commits the new file does not list are appended. Done work that no longer has a place (a removed PR, a renamed done commit) is reported as dropped.
 
 ## Ladder fields
 
+Every slice is a self-contained layer: it builds, passes the gates and leaves the product working, and whatever switches behavior on lands with the code it enables. `slice start` prints the branch command: `git fetch origin && git switch -c <branch> <base>`, or `wt new <branch> --base <base>` through the `worktree` skill for a parallel session.
+
 | Field | Required | Meaning |
 |---|---|---|
-| `base` | yes | The integration target, from `br target` |
+| `base` | yes | The integration target, from `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts target` |
 | `repo` | first save | Absolute path of the main checkout; taken from the cwd when left out |
 | `slug` | no | Must match the initiative when given |
-| `cap` | no | Open-PR cap. Optional. Set `cap` only when the user wants a limit on open PRs, drafts included; the script records 5 when it is omitted, and only `br stack --draft-prs --cap <n>` enforces a cap (slices beyond it get their PRs later) |
+| `cap` | no | Open-PR cap. Optional. Set `cap` only when the user wants a limit on open PRs, drafts included; the script records 5 when it is omitted, and `ship` stops at the cap only when one is set |
 | `deadline` | no | `YYYY-MM-DD`; `pair plan show` compares the days left to build with it |
 | `slices` | yes | The PRs in ship order, numbered 1..N |
 
@@ -31,7 +33,7 @@ Brainstorm writes these for every PR:
 | `n`, `title` | Position in ship order and a short name |
 | `goal` | What the PR is for, in one plain sentence |
 | `after` | "After this you can …", from the user's point of view |
-| `branch` | The confirmed branch name (`br name`), unique in the ladder |
+| `branch` | The confirmed branch name (branching rule in CLAUDE.md), unique in the ladder |
 | `acs` | AC ids it delivers: `AC-<n>` from the initiative's spec, or `<TICKET>/AC-<n>` for an AC that lives on a Linear ticket (for example `ENG-42/AC-1`). Plain ids are checked against `spec.md` when it exists; ticket-scoped ids are shape-checked only. Empty only on a prefactor PR |
 | `merge_point` | `true` (the default) when the PR goes live on its own or takes its group live; `false` when it goes live together with the next PR above it that is `true` |
 | `milestone` | The milestone it belongs to. A milestone's PRs are consecutive; the first PR of a later milestone waits (pair asks) until every earlier milestone's PRs are live |

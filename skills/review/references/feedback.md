@@ -42,7 +42,7 @@ Write the replies in the user's voice, following `post-pr-comments` (no tool nar
 ## 4. Act, in order, each step only after approval
 
 1. The user approves or edits the classification and the fix plan.
-2. Fixes land as commits (through `pair`, or directly when pair is off, still atomic and with a rationale body). Run the repo's checks. Push with `br push`.
+2. Fixes land as commits (through `pair`, or directly when pair is off, still atomic and with a rationale body). Run the repo's checks. Push after the account check from `ship` (`git push --no-verify`).
 3. Fill the commit shas into the `Fixed in` replies and show the final reply set.
 4. Hand the approved replies to `post-pr-comments` in reply mode. It posts them and verifies they landed.
 5. Resolving a thread is a separate yes or no per thread, asked after the reply is posted. Many teams want the commenter to resolve; when unsure, ask the user.

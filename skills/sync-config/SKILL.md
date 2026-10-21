@@ -21,7 +21,7 @@ Fit is semantic, not just textual: a change can apply cleanly and still not belo
 
 - Targets: every `~/.claude*/` that is a git repo with an `origin` remote (`git -C <dir> remote get-url origin`), except the source. Skip dirs without a remote and say so.
 - Workspace name: the dir's basename without `.claude-` (`.claude-<name>` gives `<name>`).
-- Remote auth: the remote's owner comes from its URL. If that owner isn't the active gh account (`gh auth status`), prefix every fetch and push to that remote with `GH_TOKEN=$(gh auth token --user <owner>)`.
+- Remote account: `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts account --cwd <dir>` names the account the remote belongs to, its switch command and its commit identity. Fetches may borrow that account's token (`GH_TOKEN=$(gh auth token --user <account>) git fetch`); pushes run under a visible switch (step 4).
 - Each target must be clean (`git status --short`) and not behind its remote (`git fetch`, then `git status -sb`). If it is dirty or behind, stop and ask.
 
 ## 2. Build the changeset in the source
@@ -48,8 +48,8 @@ Leave out workspace-owned paths: `projects/`, `state/`, `backups/`, `plugins/`, 
 ## 4. Commit and push
 
 - Commit message: the source commit's message, with any paths rewritten for the target.
-- Identity: the author of the target's most recent commit (`git log -1 --format='%an|%ae'`), passed with `git -c user.name=… -c user.email=…`.
-- Push to the target's own remote and branch with `--no-verify`, using the remote auth from step 1.
+- Identity: the `identity` from step 1's account check, passed with `git -c user.name=… -c user.email=…`.
+- Push to the target's own remote and branch with `--no-verify`. When the remote's account is not the active one, show the user both accounts and, after their OK, run the switch, push, and switch back to the account that was active before.
 - Push only when the user asked for it in this request. Otherwise show a table of target, commit and diffstat, and ask.
 
 ## 5. Report

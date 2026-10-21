@@ -55,7 +55,11 @@ Called by `done`, or when the user says the work is complete. Discover the compl
 
 ### split (sub-tickets per slice)
 
-From a `pair` ladder or a `ship` split: one child per slice with `parentId` set to the parent ticket. Titles name the behavior the slice delivers, never "part N of M", "PR A", "split" or ordering words, and never restate the parent's scope. Order goes in `blockedBy` relations between siblings. Each child's description uses the format with only that slice's ACs. Show every child together; on approval, create them bottom-up so `blockedBy` can reference earlier ones. Return the identifiers and each `gitBranchName` for `br name --ticket`.
+From a `pair` ladder or a `ship` split: one child per slice with `parentId` set to the parent ticket. Titles name the behavior the slice delivers, never "part N of M", "PR A", "split" or ordering words, and never restate the parent's scope. Order goes in `blockedBy` relations between siblings. Each child's description uses the format with only that slice's ACs. Show every child together; on approval, create them bottom-up so `blockedBy` can reference earlier ones. Return the identifiers and each `gitBranchName`.
+
+### branch names
+
+Applies to Linear tickets, when Linear is connected. A branch is the ticket's `gitBranchName` with the prefix swapped to the work type (`feature/`, `fix/`, `chore/`, `docs/`, `test/`, `poc/`, `refactor/`); without a ticket, a short kebab description under the same prefix. Titles and branch names carry no layer numbers. A multi-PR effort gets one sub-ticket per layer under the parent, ordered with `blockedBy` only. Existing tickets are reused: bodies say "Part of KEY-123", and closing keywords stay out when several PRs share a ticket.
 
 ### apply approved text (from `spec`, `qa`, `debug`, `done`)
 
