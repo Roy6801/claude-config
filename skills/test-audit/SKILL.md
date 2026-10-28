@@ -1,6 +1,6 @@
 ---
 name: test-audit
-description: Use for a test audit of a PR, for redundant or AI-written tests in a PR, or as the test step of ship-pr. Cuts the PR's tests to the ones that guard the behavior it adds or changes, and proves each kept test can fail.
+description: Use for a test audit of a PR, for redundant or AI-written tests in a PR, or as the test step of ship. Cuts the PR's tests to the ones that guard the behavior it adds or changes, and proves each kept test can fail.
 ---
 
 # Test audit
