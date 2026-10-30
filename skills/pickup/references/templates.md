@@ -18,7 +18,7 @@ One or two sentences, behaviour-level.
 - Files: the exact files and the functions or components touched, verified against the code.
 - Change: what changes, in behaviour and structure, in plain words.
 - Contracts: only the signatures, types or API shapes other code or later PRs depend on, as short snippets.
-- Test: what it asserts.
+- Test: one line on what it asserts; no test code.
 
 ## Size
 About <n> lines of code, tests outside the count.

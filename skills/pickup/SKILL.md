@@ -41,7 +41,7 @@ metadata:
    - Call `EnterPlanMode` before any planning dispatch, every time, re-entries included.
    - `Plan · opus · high`: read `hld.md`, the PR's entry in `roadmap.md`, `wiki/index.md`, `prs/<pr-name>/plan-draft.md` when one exists, and the code; draft the PR plan per `references/templates.md`, first line `<!-- pr: <project>/<slug>/<pr-name> -->`. Each part follows the skills for its kind, as `$CLAUDE_CONFIG_DIR/skills/kickoff/references/hld.md` lists them; each commit names the skills its implementer follows and describes its change in words, with code only for its contracts.
    - Write the plan file from the draft, present it, and revise it with the user until approved. A plan drafted here for another PR (a split, a later PR) goes to that PR's `prs/<other-pr>/plan-draft.md`.
-   - Gate: within the PR size budget (CLAUDE.md), or a split the user chose; the user approves through `ExitPlanMode`.
+   - Gate: planned work within the ~200-line target (CLAUDE.md), or a split the user chose; the user approves through `ExitPlanMode`.
    - `general-purpose · haiku · low`, given the approved plan file's path from the `ExitPlanMode` result: confirm `prs/<pr-name>/plan.md` matches it (the plan hook saves it on approval), and when it does not, copy the plan file there and report that the hook missed it; delete `prs/<pr-name>/plan-draft.md`; set the PR's status to `pr plan approved` and the Next line to "Ship <pr-name>" in `roadmap.md`.
 5. **End** (sequential)
    - Tell the user: "Next: a fresh chat, then `/ship <slug> <pr-name>`."

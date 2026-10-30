@@ -21,7 +21,8 @@ metadata:
 - **PR body:** ours, in the repo profile's shape, including any marker it names.
 - **Status:** at each gate, set the PR's status in `roadmap.md`: `building (step <n> passed)` before the PR exists, `ready #<n> (step <n> passed)` after, and `ready #<n> (shipped)` at End. Check each status against its proof in the roadmap states (`$CLAUDE_CONFIG_DIR/skills/kickoff/references/templates.md`) before trusting or writing it.
 - **Evidence:** per `references/evidence.md`, attached in the body with `pr upsert --attach`.
-- **Scripts:** `pr` is `bun <this skill's directory>/scripts/pr.ts` (`facts` for the base, template, ticket and open PR; `upsert` to create or edit the PR).
+- **Scripts:** `pr` is `bun <this skill's directory>/scripts/pr.ts` (`facts` for the base, template, ticket and open PR; `push` to push the branch; `upsert` to create or edit the PR). `push` and `upsert` are stack-aware: a branch in a gh stack is pushed with `gh stack push` and its PR is created with `gh stack submit`, so it joins the GitHub stack.
+- **Stacks:** never run `gh stack link` without `--base <trunk>`; without it the bottom PR's base moves to the default branch.
 
 ## Chief of staff
 
@@ -37,15 +38,15 @@ metadata:
    - With no pasted plan and no `prs/<pr-name>/plan.md`, stop and tell the user to plan it with `/pickup <slug> <pr-name>`. `roadmap.md` and `hld.md` alone are never a plan to build from.
    - `general-purpose · sonnet · medium`: create or update the PR's ticket through `ticket` from the plan (title, description, acceptance criteria), linked to the roadmap's parent ticket; record the ticket and its `gitBranchName` as the branch in `roadmap.md`. Without a ticket (Linear unavailable), derive the branch per CLAUDE.md's prefix rule.
    - `general-purpose · haiku · low`: check the account (CLAUDE.md) and report its commit identity; open the branch through `wt`: reuse the worktree already open for it, else `wt new <branch> --base <base>` with no further confirmation, the base being the stack parent, else the integration target from `pr facts`; for a PR with a stack parent, register the branch on top of its parent's stack per the `gh-stack` skill; report the worktree path, used from here on.
-   - `general-purpose · sonnet · medium`: write `brief.md`: repo, branch, base, commit identity, diff command against the merge base, check commands (discovered from the repo's scripts; when a package task depends on `^build`, the root task with `--filter <package>`, so a fresh worktree builds its dependencies first), requirements from the plan, scope and size budget, settled wiki items, pointers to `hld.md` and the wiki index, the app URL.
+   - `general-purpose · sonnet · medium`: write `brief.md`: repo, branch, base, commit identity, diff command against the merge base, check commands (discovered from the repo's scripts; when a package task depends on `^build`, the root task with `--filter <package>`, so a fresh worktree builds its dependencies first), requirements from the plan, scope and size cap, settled wiki items, pointers to `hld.md` and the wiki index, the app URL.
    - Gate: set the status to `building (step 1 passed)`.
 2. **Implement** (sequential)
    - `general-purpose · sonnet · high`, one implementer with the Fix prompt in `$CLAUDE_CONFIG_DIR/skills/review-fix-loop/references/prompts.md` for every planned commit, plus the changeset the repo profile asks for; two in parallel only when the work has two large, unrelated parts in disjoint files.
    - Check each commit's diff against its planned commit.
-   - Gate: the implementer's checks are green and the diff fits the size budget; set the status to `building (step 2 passed)`.
+   - Gate: the implementer's checks are green and the diff fits the size cap (350 lines, CLAUDE.md); set the status to `building (step 2 passed)`.
 3. **Raise** (sequential)
    - `general-purpose · sonnet · medium`: write a short body from the plan, with any marker the repo profile names: what the PR does and why, true to what is built, with no placeholders; run `humanizer` on it.
-   - `general-purpose · haiku · low`: `git push --no-verify -u origin <branch>` and `pr upsert` the PR on its base, which opens it ready for review and assigned to the user (a stacked PR is pushed and submitted ready for review per the `gh-stack` skill, then `pr upsert` sets its title and body); add the labels per the repo profile; set the status to `ready #<n> (step 3 passed)`.
+   - `general-purpose · sonnet · medium`: `pr push`, then `pr upsert` the PR on its base, which opens it ready for review and assigned to the user, for every PR, stacked or not (for a branch in a gh stack both go through `gh stack`, so the PR joins the GitHub stack and `pr upsert` prints its stack number); for a stacked PR record that stack number in `roadmap.md`; add the labels per the repo profile; set the status to `ready #<n> (step 3 passed)`.
 4. **Review-fix loop** (sequential)
    - Read `$CLAUDE_CONFIG_DIR/skills/review-fix-loop/SKILL.md` and run it on this PR (at most 3 rounds unless the user gave a count); the PR is open, so its "On a PR" steps run, End's thread replies and resolution included; the body is left to this skill's End.
    - Gate: set the status to `ready #<n> (step 4 passed)`.

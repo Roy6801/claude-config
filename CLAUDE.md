@@ -10,7 +10,8 @@
 
 - Non-trivial work runs `/kickoff` → `/handoff` → `/pickup` → `/ship`. Questions, lookups and small fixes: just do them.
 - Everything about a piece of work lives in `~/roadmaps/<project>/<slug>/` (project is the origin remote's repo name); repo profiles in `~/roadmaps/<project>/repo.md`. The scratchpad holds throwaway internals only. Finished roadmaps move to `_done/` and their merged worktrees are removed in the same step.
-- PR size: at most 200 lines of code, 250 with the buffer, tests excluded. Anything bigger is my call: independent PRs or a stack.
+- PR size: plan for about 200 lines of code; review and QA fixes may grow it to at most 350 (the 150 above 200 is a fix buffer, not planned scope). Tests excluded. Anything bigger is my call: independent PRs or a stack.
+- Plans show diffs or snippets from code files only; a test is one line on what it asserts, never test code.
 - Decisions are mine: at least two options, trade-offs and a recommendation, one question at a time, recorded as a dated wiki page. When constraints change or execution goes sideways, stop and re-plan with me. Inside `ship` and `review-fix-loop`, recommended picks are pre-approved; collisions they cannot resolve reach me at the end.
 - Precedence: codebase conventions, then official framework guidance, then general practice. Flag every exception with its reasoning.
 - Prefer maintained standard skills and plugins; custom code is thin glue.

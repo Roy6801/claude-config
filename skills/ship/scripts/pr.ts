@@ -1,15 +1,17 @@
 #!/usr/bin/env bun
 // PR mechanics for the ship skill: facts about a branch (base, commits, size, ticket, template,
-// existing PR) and creating or editing its PR. `facts` only reads. `upsert` creates PRs ready for review or
-// edits an existing PR's title, body and base; it never marks a PR ready, merges, or pushes.
+// existing PR) and creating or editing its PR. `facts` only reads. `push` pushes the branch: through
+// `gh stack push` when it is in a local gh stack, else plain git. `upsert` creates PRs ready for review or
+// edits an existing PR's title, body and base; for a branch in a gh stack it creates the PR with
+// `gh stack submit`, so the PR joins the GitHub stack. It never marks a PR ready by itself, merges, or links.
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { ghEnv, localRepo, originRepo, repoConventions, stackOf, ticketKey, useAccountFor, type Local } from "../../../bin/gh-activity.ts";
 
 const VALUE_FLAGS = new Set(["--branch", "--cwd", "--title", "--body-file", "--base"]);
-// Lines of code per PR: aim for NET_TARGET; NET_BUDGET (the target plus a buffer) is the ceiling. Tests sit outside the count.
+// Lines of code per PR: aim for NET_TARGET; NET_BUDGET (the target plus a 150-line fix buffer) is the ceiling. Tests sit outside the count.
 export const NET_TARGET = 200;
-export const NET_BUDGET = 250;
+export const NET_BUDGET = 350;
 // Not read line by line by a reviewer: lockfiles, generated files, changesets, snapshots.
 const EXCLUDED = [/(^|\/)[^/]*\.lock$/, /(^|\/)[^/]*-lock\.(json|yaml)$/, /(^|\/)pnpm-lock\.yaml$/, /\.gen\.[^/]+$/, /(^|\/)__generated__\//, /(^|\/)\.changeset\/[^/]+\.md$/, /\.snap$/];
 // Tests: counted on their own, outside the budget.
@@ -65,8 +67,8 @@ function emit(json: boolean, data: object, human: () => void) {
   else human();
 }
 
-async function exec(cmd: string[], cwd: string) {
-  const p = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore", env: { ...process.env, ...ghEnv(), GIT_TERMINAL_PROMPT: "0" } });
+async function exec(cmd: string[], cwd: string, env: Record<string, string> = {}) {
+  const p = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore", env: { ...process.env, ...ghEnv(), GIT_TERMINAL_PROMPT: "0", ...env } });
   const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
   return { code, out: out.trimEnd(), err: err.trim() };
 }
@@ -87,6 +89,14 @@ async function gh(cwd: string, args: string[]) {
   const r = await exec(["gh", ...args], cwd);
   if (r.code !== 0) throw new UserError(`gh ${args.slice(0, 2).join(" ")} failed: ${firstLine(r.err) || `exit ${r.code}`}`);
   return r.out;
+}
+
+// Runs a planned command (argv includes the program) and fails loudly with its exit code.
+async function runCmd(cmd: Cmd, cwd: string) {
+  if (cmd.argv[0] === "gh" && !Bun.which("gh")) throw new UserError("gh not found on PATH");
+  const r = await exec(cmd.argv, cwd, cmd.env);
+  if (r.code !== 0) throw new UserError(`${cmd.argv.slice(0, cmd.argv[1] === "stack" ? 3 : 2).join(" ")} failed (exit ${r.code}): ${firstLine(r.err) || firstLine(r.out) || "no output"}`);
+  return r;
 }
 
 // ---------- pure logic (unit tested) ----------
@@ -140,36 +150,75 @@ export function chooseBase(pr: OpenPr | null, stack: { parent: string } | null, 
   return null;
 }
 
-export type UpsertPlan = { action: "create" | "edit"; argv: string[]; notes: string[] };
+// A command to run: argv includes the program. `cwd` says where: the branch's worktree (gh stack
+// reads the stack from the checked-out branch) or where the PR commands run (the body file's folder
+// when attachments sit next to it, else the repo root).
+export type Cmd = { argv: string[]; env?: Record<string, string>; cwd: "worktree" | "pr" };
+export type StackInfo = { parent: string; number: number | null };
 
-// Decides the gh call for upsert. Creates PRs ready for review; never toggles an existing PR's draft state.
+// gh stack has no --no-verify: its pushing commands run with git hooks switched off (CLAUDE.md).
+export const NO_HOOKS_ENV = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "/dev/null" };
+
+export const formatCmd = (c: { argv: string[]; env?: Record<string, string> }) =>
+  [...Object.entries(c.env ?? {}).map(([k, v]) => `${k}=${v}`), ...c.argv.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a))].join(" ");
+
+export type PushPlan = { path: "gh-stack" | "git"; commands: Cmd[]; notes: string[] };
+
+// A branch in a local gh stack is pushed with `gh stack push` (it pushes every active layer and keeps the
+// local stack record current); any other branch with plain git.
+export function planPush(o: { branch: string; stack: StackInfo | null; remote?: string }): PushPlan {
+  const remote = o.remote ?? "origin";
+  if (o.stack) return { path: "gh-stack", commands: [{ argv: ["gh", "stack", "push", "--remote", remote], env: NO_HOOKS_ENV, cwd: "worktree" }], notes: [`${o.branch} is in a gh stack; gh stack push pushes every active layer`] };
+  return { path: "git", commands: [{ argv: ["git", "push", "--no-verify", "-u", remote, o.branch], cwd: "worktree" }], notes: [] };
+}
+
+export type UpsertPlan = { action: "create" | "edit"; stacked: boolean; commands: Cmd[]; notes: string[] };
+
+// Decides the commands for upsert. Creates PRs ready for review; never toggles an existing PR's draft state.
+// A new PR for a branch in a gh stack is created by `gh stack submit` (which pushes the stack, opens the
+// PRs and joins them to the GitHub stack), then its title and body are set with `gh pr edit`.
 export function planUpsert(o: {
   repo: string; branch: string; title: string; bodyFile: string; base: string | null;
-  pr: OpenPr | null; inStack: boolean; remoteHead: boolean; attach?: string[]; dryRun?: boolean;
+  pr: OpenPr | null; stack: StackInfo | null; remoteHead: boolean; attach?: string[]; dryRun?: boolean; remote?: string;
 }): UpsertPlan {
   const notes: string[] = [];
+  const editArgs = (target: string, assignee: string) => ["gh", "pr", "edit", target, "--repo", o.repo, assignee, "@me", "--title", o.title, "--body-file", o.bodyFile];
   if (!o.pr) {
+    if (o.stack) {
+      if (o.base && o.base !== o.stack.parent) throw new UserError(`${o.base} is not the layer below ${o.branch} in its gh stack (${o.stack.parent}); the base belongs to gh stack, not upsert`);
+      notes.push("gh stack submit pushes every branch in the stack, creates PRs for any layer that has none, and marks the stack's PRs ready for review");
+      return {
+        action: "create",
+        stacked: true,
+        commands: [
+          { argv: ["gh", "stack", "submit", "--auto", "--open", "--remote", o.remote ?? "origin"], env: NO_HOOKS_ENV, cwd: "worktree" },
+          { argv: [...editArgs(o.branch, "--add-assignee"), ...attachArgs(o.attach)], cwd: "pr" },
+        ],
+        notes,
+      };
+    }
     if (!o.base) throw new UserError("no base: pass --base <branch>");
     if (o.base === o.branch) throw new UserError(`base and head are both ${o.branch}`);
     if (!o.remoteHead) {
-      if (!o.dryRun) throw new UserError(`origin/${o.branch} does not exist; push first (git push --no-verify -u origin ${o.branch})`);
-      notes.push(`origin/${o.branch} does not exist yet; push it first (git push --no-verify -u origin ${o.branch}) before running this`);
+      if (!o.dryRun) throw new UserError(`origin/${o.branch} does not exist; push first (pr push)`);
+      notes.push(`origin/${o.branch} does not exist yet; push it first (pr push) before running this`);
     }
     return {
       action: "create",
-      argv: ["pr", "create", "--repo", o.repo, "--assignee", "@me", "--head", o.branch, "--base", o.base, "--title", o.title, "--body-file", o.bodyFile, ...attachArgs(o.attach)],
+      stacked: false,
+      commands: [{ argv: ["gh", "pr", "create", "--repo", o.repo, "--assignee", "@me", "--head", o.branch, "--base", o.base, "--title", o.title, "--body-file", o.bodyFile, ...attachArgs(o.attach)], cwd: "pr" }],
       notes,
     };
   }
-  const argv = ["pr", "edit", String(o.pr.number), "--repo", o.repo, "--add-assignee", "@me", "--title", o.title, "--body-file", o.bodyFile];
+  const argv = [...editArgs(String(o.pr.number), "--add-assignee")];
   if (o.base && o.base !== o.pr.base) {
-    if (o.inStack) throw new UserError(`#${o.pr.number} is in a gh stack; its base belongs to gh stack, not upsert`);
+    if (o.stack) throw new UserError(`#${o.pr.number} is in a gh stack; its base belongs to gh stack, not upsert`);
     argv.push("--base", o.base);
     notes.push(`base changes ${o.pr.base} -> ${o.base}`);
   }
   if (!o.pr.isDraft) notes.push(`#${o.pr.number} is ready for review; editing title and body only, its draft state is untouched`);
   argv.push(...attachArgs(o.attach));
-  return { action: "edit", argv, notes };
+  return { action: "edit", stacked: !!o.stack, commands: [{ argv, cwd: "pr" }], notes };
 }
 
 const attachArgs = (specs: string[] = []) => specs.flatMap((spec) => ["--attach", spec]);
@@ -337,20 +386,53 @@ async function upsert(args: Args) {
   let base = str(args, "--base") ?? null;
   if (!base && !pr) base = chooseBase(null, stack, await integrationTarget(ctx.repo))?.branch ?? null;
   const remote = await exec(["git", "ls-remote", "--exit-code", "origin", `refs/heads/${ctx.branch}`], ctx.local.root);
-  const plan = planUpsert({ repo: ctx.repo, branch: ctx.branch, title, bodyFile: file, base, pr, inStack: !!stack, remoteHead: remote.code === 0, attach: args.attach, dryRun: args.flags.has("--dry-run") });
+  const dryRun = args.flags.has("--dry-run");
+  const json = args.flags.has("--json");
+  const plan = planUpsert({ repo: ctx.repo, branch: ctx.branch, title, bodyFile: file, base, pr, stack, remoteHead: remote.code === 0, attach: args.attach, dryRun });
   for (const n of plan.notes) warn(n);
-  if (args.flags.has("--dry-run")) {
-    emit(args.flags.has("--json"), { dryRun: true, action: plan.action, command: ["gh", ...plan.argv] }, () =>
-      console.log(`dry run, would ${plan.action}:\n  gh ${plan.argv.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(" ")}`),
+  if (dryRun) {
+    emit(json, { dryRun: true, action: plan.action, stacked: plan.stacked, commands: plan.commands.map((c) => ({ command: c.argv, env: c.env ?? {} })), command: plan.commands.at(-1)!.argv }, () =>
+      console.log(`dry run, would ${plan.action}${plan.stacked ? " (in a gh stack)" : ""}:\n${plan.commands.map((c) => `  ${formatCmd(c)}`).join("\n")}`),
     );
     return;
   }
-  await gh(args.attach.length ? bodyDir : ctx.local.root, plan.argv);
+  const worktree = plan.stacked ? await checkoutOf(ctx.local.root, ctx.branch) : null;
+  if (plan.stacked && !pr && !worktree) throw new UserError(`${ctx.branch} is not checked out in any worktree; gh stack reads the stack from the checked-out branch`);
+  for (const c of plan.commands) await runCmd(c, c.cwd === "worktree" ? worktree! : args.attach.length ? bodyDir : ctx.local.root);
   const view = JSON.parse(await gh(ctx.local.root, ["pr", "view", ctx.branch, "--repo", ctx.repo, "--json", "number,url,isDraft,baseRefName,title,body"]));
-  if (plan.action === "create" && !view.isDraft) warn(`#${view.number} was created but is not a draft; check it on GitHub`);
+  if (plan.action === "create" && view.isDraft) warn(`#${view.number} was created as a draft; mark it ready on GitHub`);
   for (const spec of args.attach) if (String(view.body).includes(`](${attachPath(spec)})`)) warn(`${attachPath(spec)} was not uploaded; the body still points at the local file`);
-  emit(args.flags.has("--json"), { action: plan.action, number: view.number, url: view.url, isDraft: view.isDraft, base: view.baseRefName, title: view.title }, () =>
-    console.log(`${plan.action === "create" ? "created draft" : "updated"} #${view.number} -> ${view.baseRefName}${view.isDraft ? " (draft)" : ""}  ${view.url}`),
+  // A stacked PR must belong to a GitHub stack: gh stack records the stack number locally once GitHub has it.
+  const after = plan.stacked ? stackOf(ctx.local) : null;
+  if (plan.stacked && !after?.number) throw new UserError(`#${view.number} (${view.url}) is not in a GitHub stack: the local gh stack record has no stack number after ${plan.action === "create" ? "gh stack submit" : "the edit"}. Do not link it by hand; check \`gh stack view --json\` and ask the user`);
+  const stackNumber = after?.number ?? null;
+  emit(json, { action: plan.action, number: view.number, url: view.url, isDraft: view.isDraft, base: view.baseRefName, title: view.title, stack: after ? { number: stackNumber, branches: after.branches } : null }, () =>
+    console.log(`${plan.action === "create" ? "created" : "updated"} #${view.number} -> ${view.baseRefName}${view.isDraft ? " (draft)" : ""}${stackNumber ? `, gh stack #${stackNumber}` : ""}  ${view.url}`),
+  );
+}
+
+async function push(args: Args) {
+  allowFlags(args, ["--branch", "--cwd", "--dry-run"]);
+  const ctx = await context(args);
+  const root = ctx.local.root;
+  if (!(await hasRef(root, `refs/heads/${ctx.branch}`))) throw new UserError(`no local branch ${ctx.branch} to push`);
+  const stack = stackOf(ctx.local);
+  const plan = planPush({ branch: ctx.branch, stack });
+  const json = args.flags.has("--json");
+  const dryRun = args.flags.has("--dry-run");
+  const info = stack ? { number: stack.number, trunk: stack.trunk, branches: stack.branches } : null;
+  if (dryRun) {
+    emit(json, { dryRun: true, branch: ctx.branch, path: plan.path, stack: info, commands: plan.commands.map((c) => ({ command: c.argv, env: c.env ?? {} })) }, () =>
+      console.log(`dry run, ${ctx.branch} pushes via ${plan.path}${stack ? ` (gh stack${stack.number ? ` #${stack.number}` : ""}: ${stack.branches.join(" <- ")})` : ""}:\n${plan.commands.map((c) => `  ${formatCmd(c)}`).join("\n")}`),
+    );
+    return;
+  }
+  // gh stack reads the stack from the checked-out branch, so it runs in that branch's worktree.
+  const worktree = stack ? await checkoutOf(root, ctx.branch) : root;
+  if (!worktree) throw new UserError(`${ctx.branch} is not checked out in any worktree; gh stack push needs one on it`);
+  for (const c of plan.commands) await runCmd(c, worktree);
+  emit(json, { branch: ctx.branch, path: plan.path, stack: info }, () =>
+    console.log(`pushed ${ctx.branch} via ${plan.path === "gh-stack" ? `gh stack push${stack?.number ? ` (stack #${stack.number})` : ""}` : "git push --no-verify"}`),
   );
 }
 
@@ -359,10 +441,16 @@ const USAGE = `usage: pr <command>   (run inside the repo or one of its worktree
         branch, base (open PR > gh stack parent > integration target), push state, commits since base,
         size (net lines of code, target ${NET_TARGET}, ceiling ${NET_BUDGET}; tests counted apart;
         lockfiles/generated/changesets excluded), ticket key, PR template, existing open PR
+  push [--branch <b>] [--cwd <dir>] [--dry-run] [--json]
+        push the branch: \`gh stack push --remote origin\` (every active layer, git hooks off) when the branch
+        is in a local gh stack, else \`git push --no-verify -u origin <branch>\`; reports which path it took
   upsert --title <t> --body-file <f> [--base <b>] [--attach ./<file>[#alt]]... [--branch <b>] [--cwd <dir>] [--dry-run] [--json]
         create a PR ready for review, or edit the open PR's title/body (and base, outside a gh stack);
+        for a branch in a gh stack, creates it with \`gh stack submit --auto --open --remote origin\` (git hooks off;
+        pushes the stack, opens PRs for layers that have none), sets the title/body, then checks the PR is in a
+        GitHub stack and prints its number (fails if not); --base must be omitted or the stack parent;
         --attach uploads an image or video that sits next to the body file and that the body
-        references as ](./<file>); never marks ready, never pushes`;
+        references as ](./<file>); outside a stack it does not push (run \`pr push\` first); never links PRs`;
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
@@ -370,6 +458,8 @@ async function main() {
   switch (cmd) {
     case "facts":
       return facts(args);
+    case "push":
+      return push(args);
     case "upsert":
       return upsert(args);
     default:
