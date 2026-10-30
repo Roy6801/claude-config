@@ -49,10 +49,7 @@ metadata:
       - `general-purpose · opus · high`: the code against the requirements and `hld.md`: gaps, scope creep (behaviour no requirement asks for), and for each code and HLD mismatch, which one is wrong.
       - The queued reviewer and bot threads.
    5. `Plan · opus · high`, Validate and plan prompt → `round-<n>/plan.md`.
-   6. For each stack decision, in parallel:
-      - `general-purpose · sonnet · medium`: create the ticket and the PR's entry in `roadmap.md` with this PR as its stack parent and origin; `ship` registers the layer per the `gh-stack` skill when it builds it.
-      - `Plan · opus · high`: draft that PR's plan per `$CLAUDE_CONFIG_DIR/skills/pickup/references/templates.md` from the moved findings, its Does section stating the planner's in and out of scope, saved as `prs/<new-pr-name>/plan.md`.
-      - For a collision joining an existing stacked PR: `Plan · opus · high` adds the moved findings to that PR's `plan.md`.
+   6. When the plan has stack decisions, one `general-purpose · opus · high` agent handles all of them: for a new stacked PR, create its ticket and its entry in `roadmap.md` with this PR as its stack parent and origin (`ship` registers the layer per the `gh-stack` skill when it builds it), and draft its plan per `$CLAUDE_CONFIG_DIR/skills/pickup/references/templates.md` from the moved findings, its Does section stating the planner's in and out of scope, saved as `prs/<new-pr-name>/plan.md`; for a collision joining an existing stacked PR, add the moved findings to that PR's `plan.md`.
    7. `general-purpose · sonnet · high`, one fix agent with the Fix prompt for all the round's commits; two in parallel only when they form two large, unrelated parts in disjoint files.
    8. Check each commit's diff against its planned commit; write the HLD notes; on a PR, push.
    - Gate: the fix agent's checks are green; a failing commit goes back to a fresh Fix agent with the failure output until green.
