@@ -156,19 +156,7 @@ async function scanSource(
   return res;
 }
 
-// A lock entry counts as installed here only if this config dir links to the shared copy;
-// a same-named hand-rolled skill (e.g. our `qa`) is not the upstream one.
-function linkedHere(name: string): boolean {
-  try {
-    const p = join(CONFIG_DIR, "skills", name);
-    return lstatSync(p).isSymbolicLink() && readlinkSync(p).includes(".agents/skills/");
-  } catch {
-    return false;
-  }
-}
-
-// Our hand-rolled skills are real dirs; upstream ones are symlinks. A real dir with an
-// upstream name shadows (or is shadowed by) the upstream skill.
+// Our hand-rolled skills are real dirs; upstream ones are symlinks or plain copies.
 function isRealDir(name: string): boolean {
   try {
     const st = lstatSync(join(CONFIG_DIR, "skills", name));
@@ -176,6 +164,30 @@ function isRealDir(name: string): boolean {
   } catch {
     return false;
   }
+}
+
+// A local fork marks itself with `origin: local` in its SKILL.md frontmatter.
+function isLocalFork(name: string): boolean {
+  try {
+    const text = readFileSync(join(CONFIG_DIR, "skills", name, "SKILL.md"), "utf8");
+    const front = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
+    return /^\s+origin:\s*local\s*$/m.test(front);
+  } catch {
+    return false;
+  }
+}
+
+// A lock entry counts as installed here if this config dir links to the shared copy, or holds
+// a plain copy of it (a real dir not marked as a local fork). A real dir marked `origin: local`
+// (or a same-named hand-rolled skill, e.g. our `qa`) is not the upstream one and clashes with it.
+function installedHere(name: string): boolean {
+  try {
+    const p = join(CONFIG_DIR, "skills", name);
+    if (lstatSync(p).isSymbolicLink()) return readlinkSync(p).includes(".agents/skills/");
+  } catch {
+    return false;
+  }
+  return isRealDir(name) && !isLocalFork(name);
 }
 
 async function scan() {
@@ -191,9 +203,9 @@ async function scan() {
     installedNames.add(name);
     installedNames.add(basename(skillDir(entry.skillPath) || name));
     if (!bySource.has(entry.source)) bySource.set(entry.source, []);
-    // Track only skills linked into this config dir; pruned ones stay in the shared lock
+    // Track only skills installed in this config dir (linked or copied); pruned ones stay in the shared lock
     // (other config dirs may use them) but aren't reported as updates or new.
-    if (linkedHere(name)) bySource.get(entry.source)!.push([name, entry]);
+    if (installedHere(name)) bySource.get(entry.source)!.push([name, entry]);
   }
   for (const s of EXTRA_SOURCES) if (!bySource.has(s)) bySource.set(s, []);
 
@@ -231,7 +243,7 @@ async function scan() {
   next.new.sort((a, b) => a.source.localeCompare(b.source) || a.path.localeCompare(b.path));
   next.clashes = [
     ...skills
-      .filter(([name, e]) => isRealDir(name) && !ign.has(`${e.source}:${skillDir(e.skillPath)}`))
+      .filter(([name, e]) => isRealDir(name) && !installedHere(name) && !ign.has(`${e.source}:${skillDir(e.skillPath)}`))
       .map(([name, e]): Clash => ({ name, kind: "lock", source: e.source, path: e.skillPath })),
     ...next.new.filter((n) => isRealDir(n.name)).map((n): Clash => ({ name: n.name, kind: "new", source: n.source, path: n.path })),
   ].sort((a, b) => a.name.localeCompare(b.name) || a.kind.localeCompare(b.kind));
