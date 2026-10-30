@@ -36,36 +36,33 @@ metadata:
    - Resolve the roadmap folder; save the pasted plan to `prs/<pr-name>/plan.md` when the hook has not.
    - With no pasted plan and no `prs/<pr-name>/plan.md`, stop and tell the user to plan it with `/pickup <slug> <pr-name>`. `roadmap.md` and `hld.md` alone are never a plan to build from.
    - `general-purpose · sonnet · medium`: create or update the PR's ticket through `ticket` from the plan (title, description, acceptance criteria), linked to the roadmap's parent ticket; record the ticket and its `gitBranchName` as the branch in `roadmap.md`. Without a ticket (Linear unavailable), derive the branch per CLAUDE.md's prefix rule.
-   - `general-purpose · haiku · low`: check the account (CLAUDE.md); open the branch through `wt`: reuse the worktree already open for it, else `wt new <branch> --base <base>` with no further confirmation, the base being the stack parent, else the integration target from `pr facts`; for a PR with a stack parent, register the branch on top of its parent's stack per the `gh-stack` skill; report the worktree path, used from here on.
-   - `general-purpose · sonnet · medium`: write `brief.md`: repo, branch, base, diff command against the merge base, check commands (discovered from the repo's scripts; when a package task depends on `^build`, the root task with `--filter <package>`, so a fresh worktree builds its dependencies first), requirements from the plan, scope and size budget, settled wiki items, pointers to `hld.md` and the wiki index, the app URL.
+   - `general-purpose · haiku · low`: check the account (CLAUDE.md) and report its commit identity; open the branch through `wt`: reuse the worktree already open for it, else `wt new <branch> --base <base>` with no further confirmation, the base being the stack parent, else the integration target from `pr facts`; for a PR with a stack parent, register the branch on top of its parent's stack per the `gh-stack` skill; report the worktree path, used from here on.
+   - `general-purpose · sonnet · medium`: write `brief.md`: repo, branch, base, commit identity, diff command against the merge base, check commands (discovered from the repo's scripts; when a package task depends on `^build`, the root task with `--filter <package>`, so a fresh worktree builds its dependencies first), requirements from the plan, scope and size budget, settled wiki items, pointers to `hld.md` and the wiki index, the app URL.
    - Gate: set the status to `building (step 1 passed)`.
 2. **Implement** (sequential)
-   - `general-purpose · sonnet · medium`: run `humanizer` on the plan's commit titles and descriptions.
-   - `general-purpose · sonnet · high`, one fresh agent per commit with the Fix prompt in `$CLAUDE_CONFIG_DIR/skills/review-fix-loop/references/prompts.md`, in parallel when files are disjoint: each new test fails without its change and passes with it.
-   - Check each implementer's diff against its planned commit.
-   - `general-purpose · haiku · low`: commit each with its planned message as the repo's account; add the changeset the repo profile asks for; run the checks.
-   - Gate: the checks pass and the diff fits the size budget; set the status to `building (step 2 passed)`.
+   - `general-purpose · sonnet · high`, one implementer with the Fix prompt in `$CLAUDE_CONFIG_DIR/skills/review-fix-loop/references/prompts.md` for every planned commit, plus the changeset the repo profile asks for; two in parallel only when the work has two large, unrelated parts in disjoint files.
+   - Check each commit's diff against its planned commit.
+   - Gate: the implementer's checks are green and the diff fits the size budget; set the status to `building (step 2 passed)`.
 3. **Raise** (sequential)
-   - `general-purpose · sonnet · high`: write the body from the plan, then run `humanizer` on it.
+   - `general-purpose · sonnet · medium`: write a short body from the plan, with any marker the repo profile names: what the PR does and why, true to what is built, with no placeholders; run `humanizer` on it.
    - `general-purpose · haiku · low`: `git push --no-verify -u origin <branch>` and `pr upsert` the PR on its base, which opens it ready for review and assigned to the user (a stacked PR is pushed and submitted ready for review per the `gh-stack` skill, then `pr upsert` sets its title and body); add the labels per the repo profile; set the status to `ready #<n> (step 3 passed)`.
 4. **Review-fix loop** (sequential)
-   - Read `$CLAUDE_CONFIG_DIR/skills/review-fix-loop/SKILL.md` and run it on this PR (at most 3 rounds unless the user gave a count); the PR is open, so its "On a PR" steps run, End's thread replies and resolution included.
+   - Read `$CLAUDE_CONFIG_DIR/skills/review-fix-loop/SKILL.md` and run it on this PR (at most 3 rounds unless the user gave a count); the PR is open, so its "On a PR" steps run, End's thread replies and resolution included; the body is left to this skill's End.
    - Gate: set the status to `ready #<n> (step 4 passed)`.
 5. **QA** (sequential)
    - Read `$CLAUDE_CONFIG_DIR/skills/qa/SKILL.md` and run it on this PR.
    - When QA reports failures, read `$CLAUDE_CONFIG_DIR/skills/review-fix-loop/SKILL.md` and run one round (its Round step only, skipping Final pass, Test-audit and End) with the failures as queued findings, then have QA rerun the failed cases and their neighbours.
    - Gate: set the status to `ready #<n> (step 5 passed)`.
 6. **Evidence** (sequential)
-   1. `general-purpose · sonnet · high`: estimate the evidence that suits this PR from the plan's evidence section, the requirements, the diff, QA's captures and `references/evidence.md`: per requirement, a stats table, before and after screenshots, a terra-local video, or a combination; mark what QA already captured. Into `evidence/plan.md`, one task per piece.
+   1. The tasks are the plan's Evidence section, minus what QA already captured. Only when that section is missing or no longer fits the final diff, `general-purpose · sonnet · high`: estimate the evidence that suits this PR from the requirements, the diff, QA's captures and `references/evidence.md`: per requirement, a stats table, before and after screenshots, a terra-local video, or a combination; mark what QA already captured. Into `evidence/plan.md`, one task per piece.
    2. Dispatch the tasks, each into `evidence/`:
       - Screenshots (parallel), `general-purpose · sonnet · medium` per task: the same item before (base or staging) and after (this branch), through `claude-in-chrome`.
       - Stats tables (parallel), `general-purpose · sonnet · high` per task: measure through scripts, tests or evals (never a database), vetted with `benchmark-checklist`.
       - Execution output (parallel), `general-purpose · sonnet · medium` per task: the named test's fail-before and pass-after output, or the console output of the behaviour.
       - Video (after the screenshots, one at a time, since it records a window), `general-purpose · sonnet · high`: a terra-local walkthrough of the flow, narrated in the user's voice per terra-local's guides.
-   3. `general-purpose · sonnet · medium`: write the body's Evidence section in the repo profile's shape (one context line per piece), run `humanizer` on its text, and `pr upsert --attach` the files.
-   - Gate: the body shows only evidence that exists, polished; each requirement still without evidence goes on the End list for the user, with why; set the status to `ready #<n> (step 6 passed)`.
+   - Gate: each requirement still without evidence goes on the End list for the user, with why; set the status to `ready #<n> (step 6 passed)`.
 7. **End** (sequential)
-   - `general-purpose · sonnet · high`: write the final body from the final diff, keeping the Evidence section, and check every statement in it against that diff; run `humanizer` on it; `pr upsert`.
+   - `general-purpose · sonnet · high`: write the final body once, in the repo profile's shape, from the final diff and `evidence/`, its Evidence section showing only evidence that exists with one context line per piece; check every statement in it against that diff; run `humanizer` on it; save it as `evidence/body.md`, referencing each file as `](./<file>)`, and `pr upsert --attach` those files.
    - When folds or stacks moved scope, `general-purpose · sonnet · medium` updates the ticket through `ticket`.
    - `general-purpose · sonnet · medium`: ingest what this PR settled into the wiki (decisions, HLD notes, collisions and how they were resolved, user corrections), dated and citing the PR folder; set the PR's status to `ready #<n> (shipped)` and the Next line in `roadmap.md` to the following PR's next step per the roadmap states.
    - Copy `/pickup <slug>`.

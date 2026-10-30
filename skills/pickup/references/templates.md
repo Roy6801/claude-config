@@ -15,8 +15,10 @@ One or two sentences, behaviour-level.
 ## Commits
 ### 1. <type(scope): title>
 - Why: one sentence.
-- Diff: the full change per file, as a unified diff.
-- Test: what it asserts and that it fails without the change.
+- Files: the exact files and the functions or components touched, verified against the code.
+- Change: what changes, in behaviour and structure, in plain words.
+- Contracts: only the signatures, types or API shapes other code or later PRs depend on, as short snippets.
+- Test: what it asserts.
 
 ## Size
 About <n> lines of code, tests outside the count.

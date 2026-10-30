@@ -1,6 +1,6 @@
 ---
 name: qa
-description: Browser QA of a PR against its roadmap scope and requirements, with parallel case extraction and testers; failures are reported with their reproduction.
+description: Browser QA of a PR against its roadmap scope and requirements, with one case writer and parallel testers; failures are reported with their reproduction.
 disable-model-invocation: true
 metadata:
   origin: local
@@ -33,18 +33,17 @@ metadata:
 1. **Start** (sequential)
    - From ship: use ship's `brief.md`. On a PR: resolve the roadmap and PR folders from the PR's branch; read the requirements, the roadmap entry, the scope and `git diff <merge-base>`.
    - Get the app running and its URL, per the App rule.
-2. **Cases** (parallel), each into `qa-cases/<kind>.md`, one line per case (starting state, steps, expected):
-   - `general-purpose · sonnet · medium`: requirement cases, at least one per requirement.
-   - `general-purpose · sonnet · high`: edge cases (boundaries, odd inputs, combinations, neighbouring behaviour the diff touches).
-   - UI work only, `general-purpose · sonnet · medium`: loading, error and empty states.
-   - UI work only, `general-purpose · sonnet · medium`: accessibility per the repo's conventions, with `accessibility` and `web-design-guidelines`.
-   - Diff touches permissions or auth, `general-purpose · sonnet · medium`: permission and auth cases.
-3. **Merge** (sequential)
-   - `general-purpose · haiku · low`: merge into `qa-cases.md`, drop duplicates, and group cases that change the same data into shares, one share per tester.
+2. **Cases** (sequential)
+   - `general-purpose · sonnet · high`: write `qa-cases.md`, one line per case (starting state, steps, expected):
+     - Requirement cases, at least one per requirement.
+     - Edge cases: boundaries, odd inputs, combinations, neighbouring behaviour the diff touches.
+     - Diff touches UI: loading, error and empty states; accessibility per the repo's conventions, with `accessibility` and `web-design-guidelines`.
+     - Diff touches permissions or auth: permission and auth cases.
+     - Drop duplicates and group cases that change the same data into shares, one share per tester.
    - Show the case list to the user in one message and start.
-4. **Run** (parallel)
+3. **Run** (parallel)
    - `tester · sonnet · high`, one per share: run the share per the Rules; write results and evidence into `qa/<share>.md` and `evidence/`.
    - Gate: every case is pass, fail (2 of 2), uncertain or blocked.
-5. **End** (sequential)
+4. **End** (sequential)
    - `general-purpose · haiku · low`: merge the share results into `qa.md`: verdict per requirement, then each case.
    - Tell the user: the verdict per requirement, then each failure with its reproduction, then uncertain and blocked cases, then the path to `qa.md`.
