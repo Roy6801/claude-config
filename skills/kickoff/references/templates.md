@@ -2,10 +2,11 @@
 
 Plain sentences and bullets, behaviour-level. Code and wide tables belong in later PR plans.
 
-## Plan
+## outline.md
+
+Short enough to present in one screen of chat. Detail waits for `/pickup`.
 
 ```markdown
-<!-- roadmap: <project>/<slug> -->
 # <Title>
 
 ## Problem
@@ -15,9 +16,6 @@ Two or three sentences.
 ### <Part> (<why it comes at this point in the order>)
 - <what changes>
 
-## HLD
-Sections per `references/hld.md` for the kind of work.
-
 ## Milestones
 ### <Milestone> (what goes live together)
 - <pr-name>, <pr-name>
@@ -25,17 +23,25 @@ Sections per `references/hld.md` for the kind of work.
 ## PRs
 ### <pr-name>
 - **Does:** one or two sentences.
-- **Size:** about <n> lines of code.
+- **Size:** about <n> lines of code, tests excluded.
 - **Depends on:** <pr-name>, or nothing.
 - **Ticket:** <id>, or none yet.
 - **Evidence:** what will prove it.
 
+## Open decisions
+### <question>
+- <option>: <trade-off>.
+- <option>: <trade-off>.
+- Recommended: <option>, because <reason>.
+- Settled <YYYY-MM-DD>: <option>, because <the user's reason>.
+
 ## Size decisions
-### <part>
+### <pr-name>
 - Split points and the size of each piece.
 - Independent PRs: <trade-off>.
 - Stacked PRs: <trade-off>.
 - Recommended: <option>, because <reason>.
+- Settled <YYYY-MM-DD>: <option>.
 
 ## Unresolved questions
 ```
@@ -63,7 +69,7 @@ The single list of PR statuses. Kickoff, handoff, pickup and ship check a status
 
 | Status | Proof | Set by |
 | --- | --- | --- |
-| `planned` | the PR's record in `roadmap.md` | kickoff (Save plan); pickup when a later status lacks its proof |
+| `planned` | the PR's record in `roadmap.md` | kickoff (Save); pickup when a later status lacks its proof |
 | `pr plan approved` | the status and `prs/<pr-name>/plan.md` | pickup (Plan), after the user approves the PR plan |
 | `building (step <n> passed)` | `prs/<pr-name>/plan.md` and `brief.md`, the branch in `roadmap.md` | ship |
 | `ready #<n> (step <n> passed)` | PR #<n> open (`gh pr view`) | ship |
@@ -76,4 +82,4 @@ The single list of PR statuses. Kickoff, handoff, pickup and ship check a status
 
 ## hld.md
 
-The HLD section of the approved plan under a dated heading. Later changes add new dated notes below it.
+The HLD per `references/hld.md`, written at Save from the agreed outline and the code, under a dated heading. Later changes, and detail the user asks for, add new dated notes below it.

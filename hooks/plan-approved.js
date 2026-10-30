@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 // PostToolUse on ExitPlanMode (fires only when the user approves a plan). Copies what
-// the user needs next to the clipboard and saves marked plans into ~/roadmaps:
-//   <!-- roadmap: <project>/<slug> -->          copy `/pickup <slug>`, save <slug>/plan.md
+// the user needs next to the clipboard and saves marked PR plans into ~/roadmaps:
 //   <!-- pr: <project>/<slug>/<pr-name> -->     copy the plan, save <slug>/prs/<pr-name>/plan.md
 //   no marker                                   copy the plan
 // Then tells Claude to finish only its skill's post-approval steps and stop.
@@ -43,27 +42,20 @@ function main() {
   const plan = planText(input);
   if (!plan) return;
 
-  const marker = plan.match(/<!--\s*(roadmap|pr):\s*([^\s>]+)\s*-->/);
-  const parts = marker ? marker[2].split('/') : [];
+  const marker = plan.match(/<!--\s*pr:\s*([^\s>]+)\s*-->/);
+  const parts = marker ? marker[1].split('/') : [];
   const valid = parts.length > 0 && parts.every((p) => SEGMENT.test(p) && p !== '.' && p !== '..');
   const roadmaps = path.join(os.homedir(), 'roadmaps');
 
-  let clip = plan;
   let note = 'Plan copied to the clipboard.';
-  if (valid && marker[1] === 'roadmap' && parts.length === 2) {
-    const [project, slug] = parts;
-    const file = path.join(roadmaps, project, slug, 'plan.md');
-    save(file, plan);
-    clip = `/pickup ${slug}`;
-    note = `Roadmap plan saved to ${file}; \`/pickup ${slug}\` copied to the clipboard.`;
-  } else if (valid && marker[1] === 'pr' && parts.length === 3) {
+  if (valid && parts.length === 3) {
     const [project, slug, pr] = parts;
     const file = path.join(roadmaps, project, slug, 'prs', pr, 'plan.md');
     save(file, plan);
     note = `PR plan saved to ${file} and copied to the clipboard.`;
   }
 
-  execFileSync('pbcopy', { input: clip });
+  execFileSync('pbcopy', { input: plan });
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PostToolUse',
