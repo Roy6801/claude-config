@@ -1,8 +1,8 @@
 # Conventions mode
 
-Discover how a repo wants work done, fresh on every run. There are no stored repo profiles: conventions drift, so they are read from the repo and from GitHub each time, and every convention is written down with its source.
+Discover how a repo wants work done, fresh on every run. Code conventions are read fresh every run; PR shape lives in the repo profile (`repo.md`), owned by `ship`. Every convention is written down with its source.
 
-Never read `.env*` files and never run a script that touches a database. This mode only reads files and runs read-only commands; it does not run lint, tests, or builds.
+Read-only: the only files written are source files and the bundle; never read `.env*` files or touch a database. It does not run lint, tests, or builds.
 
 ## Inputs
 
@@ -57,7 +57,7 @@ From `gh-activity conventions`: the integration target with its source and evide
 
 ## Precedence and conflicts
 
-Codebase conventions come first, then official framework guidance, then general practice. Written repo rules and patterns in the code are both codebase conventions. When they disagree (for example, `AGENTS.md` says one thing and most files do another), never pick silently: list the conflict with both sources and recommend one, usually the written rule for new code unless the code shows the rule was abandoned. Fetch official framework guidance (Context7, or `scout best-practices` for deeper research) only when a conflict or a new mechanism needs it.
+Written repo rules and patterns in the code are both codebase conventions. When they disagree (for example, `AGENTS.md` says one thing and most files do another), never pick silently: list the conflict with both sources and recommend one, usually the written rule for new code unless the code shows the rule was abandoned. Use research mode when a conflict or new mechanism needs official guidance.
 
 ## Output template (`conventions.md`)
 

@@ -1,6 +1,6 @@
 # Structured findings
 
-One schema for every machine-readable review in this setup: `thermo` in structured mode, the `reviewer` agent, and the `review` skill that consumes both. Keep it identical everywhere so findings from different passes can be merged and deduplicated.
+The severity scale and finding fields every review pass uses. Keep it identical everywhere so findings from different passes can be merged and deduplicated.
 
 ## Shape
 
@@ -39,7 +39,7 @@ Severity answers "how bad is this if it is real". Confidence is a separate axis;
 
 | Severity | Meaning | Examples |
 |---|---|---|
-| `blocker` | Must change before merge. | Irreversible data loss or exposure on a normal path; a missed acceptance criterion; any thermo presumptive blocker (a file pushed past 1000 lines, ad-hoc branching tangling an existing flow, feature checks scattered across shared code, a duplicated canonical helper or logic in the wrong layer, a plausible code-judo move left on the table). |
+| `blocker` | Must change before merge. | Irreversible data loss or exposure on a normal path; a missed acceptance criterion; any presumptive blocker in rubric.md. |
 | `major` | Should change in this PR unless the author justifies it. | Wrong behaviour on a reachable path with a plausible trigger; a structural regression; an unexplained convention deviation; non-trivial logic with no test. |
 | `minor` | Worth fixing, fine as a follow-up. | Recoverable or unusual-trigger misbehaviour; a consistency gap with no runtime consequence; a thin wrapper or a needless cast. |
 | `nit` | Cosmetic or taste. | Naming, ordering, a comment. |

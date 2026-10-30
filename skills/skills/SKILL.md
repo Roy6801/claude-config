@@ -1,9 +1,6 @@
 ---
 name: skills
-description: |
-  Review and apply third-party skill changes (updates, moves, removals, new upstream skills) tracked by skills-audit, and work through the skill refine queue. Every destructive step is confirmed.
-
-  Use when: the status line shows a `skills:` segment, or asked to "update skills", "check skills", "/skills".
+description: "Review third-party skill updates, moves, removals and new upstream skills, and work the refine queue."
 disable-model-invocation: true
 metadata:
   origin: local
@@ -13,9 +10,7 @@ metadata:
 
 Data comes from `bun $CLAUDE_CONFIG_DIR/bin/skills-audit.ts`. Lock: `~/.agents/.skill-lock.json` (`skills.<name>.{source,skillPath,installedAt,updatedAt}`).
 
-Status-line segment `skills: N updates · N removed · N moved · N new · N name clashes · N to refine · check failed` (only non-zero parts shown): installed skills changed upstream; installed skills deleted upstream; installed skills relocated upstream; upstream skills not installed; upstream names that collide with our real dirs; `/skill-retro` findings queued; last scan errored.
-
-Never run `bunx skills update|remove|add` before the user has confirmed that group.
+Each group runs only after the user confirms it.
 
 Layout: third-party skills live once in `~/.agents/skills/<name>/` and are symlinked (relative, `../../.agents/skills/<name>`) from the `skills/` folder of each config dir that uses them (config dirs: every `~/.claude*/` with a `skills/` folder; dirs differ, so ask which ones get a link). `bunx skills` does not manage those links (lock `lastSelectedAgents` has no Claude entry), so:
 
@@ -92,7 +87,7 @@ Show name + description. Per skill the user picks:
 bun $CLAUDE_CONFIG_DIR/bin/skills-audit.ts refine list
 ```
 
-Show id, name, note. User picks entries to work on now or leaves them. After the fix is done and the user agrees: `bun $CLAUDE_CONFIG_DIR/bin/skills-audit.ts refine done <id>`. Never mark done unseen.
+Show id, name, note. User picks entries to work on now or leaves them. After the fix is done and the user agrees: `bun $CLAUDE_CONFIG_DIR/bin/skills-audit.ts refine done <id>`.
 
 ## 7. Verify
 

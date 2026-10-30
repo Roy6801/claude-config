@@ -1,72 +1,50 @@
 ---
 name: qa
-description: |
-  Code-derived QA against the acceptance criteria. Loads the ACs first (`spec.ts acs`), then has the `tester` agent derive cases from the code paths (happy, error, edge, loading, empty, auth), get them approved, and drive the browser through them. A failure counts only when it reproduces at least twice; anything else is reported honestly as uncertain. Turns the user's manual test steps into lasting automated tests in the repo's own framework (offered, never forced), drafts a bug per failure (a Linear ticket through `ticket` when Linear is connected, else a GitHub issue; created only after approval) and hands it to `debug`, and reports a verdict per AC with GIFs for UI.
-
-  Use when: a `pair` checkpoint reaches its QA step, validating a feature before merge, a post-refactor parity check, a regression sweep on a flow, or asked to "QA this", "test in browser", "build test cases for X", or "turn my test steps into tests".
-user-invocable: true
+description: Browser QA of a PR against its roadmap scope and requirements, with parallel case extraction and testers; failures are reported with their reproduction.
+disable-model-invocation: true
 metadata:
   origin: local
 ---
 
 # QA
 
-The case list comes from the acceptance criteria and the code, never from product copy or guesses. Every failure is either reproduced on demand (at least twice) or reported as uncertain with what was tried. The `tester` agent (`$CLAUDE_CONFIG_DIR/agents/tester.md`) does the reading and the browser work; the main thread scopes, gets approvals, drafts bug issues, and hands bugs to `debug`.
-
-## Requires
-
-- A browser tool chosen per CLAUDE.md "Browser Automation": `claude-in-chrome` by default, `agent-browser` only in the cases CLAUDE.md allows. If the chosen tool is unavailable, stop and ask the user before any code-only run.
-- A running app URL. If none is running, ask the user how to start it (or use the `run` skill), never guess a port.
-
-## Modes
-
-- `/qa [slice|issue|"flow"]`: full QA run (sections 1 to 6).
-- `/qa tests`: only section 5, turning manual steps into automated tests.
-
-## 1. Scope
-
-1. Run `bun $CLAUDE_CONFIG_DIR/bin/work.ts current --json`. When an initiative is active, load its ACs with `bun $CLAUDE_CONFIG_DIR/skills/spec/scripts/spec.ts acs <slug> --json` (skip superseded ones). Inside a `pair` checkpoint, keep only the slice's ACs and take its `test_script` from `pair plan show`.
-2. With no spec, take the ACs from the Linear ticket (`ticket` read mode) or the GitHub issue (`gh issue view`), or ask the user for them. Never invent ACs; with none at all, say so and run code paths only, marked "no AC".
-3. Name the target files or flows, the URL, the auth state and fixtures needed, and what is out of scope. Fixture data comes from the UI or the user, never from a database; when a case needs a data state you cannot create, write a data request for the user.
-
-## 2. Case matrix (tester phase 1)
-
-Dispatch `tester` for phase 1 only with the ACs (id, Given/When/Then, Verify), the target, the URL and the constraints. It returns a matrix where AC cases come first (at least one case per AC, carrying the AC id), followed by code-path cases: happy, error, edge, loading, empty, and auth or permission boundaries. Cases the code cannot decide are marked spec ambiguity.
-
-Show the matrix to the user with the ambiguities as questions. Wait for approval or edits before any browser action.
-
-## 3. Execute (tester phase 2)
-
-Dispatch `tester` for phase 2 with the approved matrix. Results per case are `pass`, `fail` (reproduced N/N, N ≥ 2), `uncertain`, `spec-ambiguity` or `out-of-scope`. Never ask the tester to retry a flake into a pass or to firm up an uncertain finding; flake is a finding.
-
-Evidence: a GIF for every UI case that fails or is uncertain, and one GIF of the passing main flow for each AC that has UI. Console and network excerpts go with every failure.
-
-## 4. Bugs
-
-For each `fail` and each `uncertain` finding:
-
-1. Draft a bug (in the `ticket` skill's format when Linear is connected, else a GitHub issue): a title naming the broken behaviour, the AC id, the exact reproduction (precondition, steps, expected vs actual with `file:line`, evidence links, "reproduced N/N"), or for uncertain findings the symptom, the attempts and why each failed to pin it down. Link it to the initiative's ticket or issue. Show the exact text and create it (through `ticket`, or `gh issue create`) only after the user approves.
-2. Hand the bug to the `debug` skill with the tester's report as its starting evidence; the reproduction is the first candidate for its feedback loop. The fix lands through `pair`.
-3. After the fix lands, re-dispatch `tester` for phase 5 (re-verify the failing cases and their neighbours). Loop until the matrix is green or the user explicitly parks the rest.
-
-## 5. Lasting tests (offer, never force)
-
-Manual steps decay; tests stay. Collect the user's manual test steps (the slice's `test_script`, steps in the issue, or steps the user ran) and the passing AC cases. Then:
-
-1. Discover how the repo tests with the `gather-context` skill in `conventions` mode: framework, file locations and naming, helpers and fixtures, the test command. Never introduce a new framework; if the repo has none for this layer, say so and stop.
-2. Propose a short table: manual step or case → test file → test name → AC id → layer (unit, integration, e2e). Prefer the lowest layer that still exercises the behaviour.
-3. On the user's yes, the tests land as a planned commit through `pair` (or one commit the user approves when `pair` is off), written by the `builder` agent to match the repo's patterns, and run red-then-green where they cover a fixed bug.
-
-## 6. Report
-
-Write the report from `references/report.md` to `<initiative dir>/qa-<YYYY-MM-DD>.md` (no initiative: `$CLAUDE_CONFIG_DIR/state/qa/<YYYY-MM-DD>-<focus>.md`). Tell the user: the verdict per AC first (pass, fail with issue, uncertain, not covered), then counts, then the code gaps the tester surfaced, then the path. Offer a private artifact page of the report with its GIFs; publish only on a yes.
+- `/qa #<number>` or `/qa <slug> <pr-name>`: QA one PR. From `ship`: QA ship's branch, using ship's `brief.md`.
+- Cases come from the roadmap's PR entry, the scope, the requirements (the PR plan, else the ticket) and the diff.
+- Output in the PR folder (`~/roadmaps/<project>/<slug>/prs/<pr-name>/`; for a PR outside any roadmap, `~/roadmaps/<project>/pr-<number>/`): `qa-cases.md`, `qa.md`, `evidence/`.
 
 ## Rules
 
-- ACs first, then code paths. Cases come from code and ACs, never assumptions.
-- Phase 1 before phase 2, and the user's approval of the matrix gates phase 2.
-- Exact reproduction (at least 2 of 2) or honest uncertainty; never a hallucinated reproduction.
-- QA never fixes. Fixes go through `debug` and `pair`.
-- Never touch a database; data needs become a data request for the user.
-- Tickets, issues and artifacts are created only after the user approves the exact content.
-- Package commands use `ni`, `nr` or `nlx`, never `npm` or `npx`.
+- **Browser:** every tester starts in `claude-in-chrome`, one tab each, at most 3. Testers beyond 3 start in `agent-browser`; on opening the URL, one that meets a sign-in hands its cases back to a `claude-in-chrome` tester.
+- **Sign-in walls:** per CLAUDE.md's Browser section. Still blocked: stop every tester and tell the user who is blocked on what.
+- **Real runs only:** every verdict comes from a browser run. A tester that cannot run a case reports it blocked.
+- **Failures:** a failure counts when it reproduces 2 of 2 times; anything less is reported uncertain.
+- **Evidence:** as cases run, capture before and after per `$CLAUDE_CONFIG_DIR/skills/ship/references/evidence.md`; a GIF for each failure and for the main flow.
+- **App:** use the URL in the brief or from the user. Otherwise start the app with the repo's dev script; when its port is taken, start it on a free port (the script's port flag or `PORT`). A taken port never blocks QA.
+- **Data:** cases set up their data through the UI; a state the UI cannot create becomes a data request for the user.
+
+## Chief of staff
+
+- Read `$CLAUDE_CONFIG_DIR/skills/chief-of-staff/SKILL.md` and run as chief of staff.
+- Every subagent writes into the PR folder, and returns at most 150 words.
+- Agent entries read `type · model · effort`: task → output.
+
+### Dispatch plan
+
+1. **Start** (sequential)
+   - From ship: use ship's `brief.md`. On a PR: resolve the roadmap and PR folders from the PR's branch; read the requirements, the roadmap entry, the scope and `git diff <merge-base>`.
+   - Get the app running and its URL, per the App rule.
+2. **Cases** (parallel), each into `qa-cases/<kind>.md`, one line per case (starting state, steps, expected):
+   - `general-purpose · sonnet · medium`: requirement cases, at least one per requirement.
+   - `general-purpose · sonnet · high`: edge cases (boundaries, odd inputs, combinations, neighbouring behaviour the diff touches).
+   - UI work only, `general-purpose · sonnet · medium`: loading, error and empty states.
+   - UI work only, `general-purpose · sonnet · medium`: accessibility per the repo's conventions, with `accessibility` and `web-design-guidelines`.
+   - Diff touches permissions or auth, `general-purpose · sonnet · medium`: permission and auth cases.
+3. **Merge** (sequential)
+   - `general-purpose · haiku · low`: merge into `qa-cases.md`, drop duplicates, and group cases that change the same data into shares, one share per tester.
+   - Show the case list to the user in one message and start.
+4. **Run** (parallel)
+   - `tester · sonnet · high`, one per share: run the share per the Rules; write results and evidence into `qa/<share>.md` and `evidence/`.
+   - Gate: every case is pass, fail (2 of 2), uncertain or blocked.
+5. **End** (sequential)
+   - `general-purpose · haiku · low`: merge the share results into `qa.md`: verdict per requirement, then each case.
+   - Tell the user: the verdict per requirement, then each failure with its reproduction, then uncertain and blocked cases, then the path to `qa.md`.

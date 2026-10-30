@@ -55,7 +55,7 @@ export const openLine = (path: string, l: Launcher = launcher()) => `cd ${path} 
 
 const USAGE = `usage: launch [--dir <config dir>] <command>
   prefix                 launch prefix for the workspace (alias -d, or the full command)
-  resume <name>          terminal and in-session resume lines for a named session or initiative
+  resume <name>          terminal and in-session resume lines for a named session or roadmap
   start <prompt>         terminal line that starts a new session with <prompt>
   open <path>            terminal line that opens a new session in <path>`;
 

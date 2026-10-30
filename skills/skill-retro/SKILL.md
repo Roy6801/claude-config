@@ -10,7 +10,7 @@ metadata:
 
 # skill-retro
 
-Scope: the agent environment only. Not repo code standards (use Matt's `retro` for those, if installed).
+Scope: the agent environment only, not repo code standards.
 
 ## 1. Read the session
 

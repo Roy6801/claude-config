@@ -1,6 +1,6 @@
 # Context sources: tools, queries, caps, gates
 
-Every source is read-only and used only when connected; an unconnected source is skipped and recorded under Gaps. Caps are per agent run. When a cap is reached, the agent stops and records the gap; it does not keep fishing. Time-box: if a source needs more than a couple of calls before producing anything useful, drop it and note why.
+Every source is read-only. Caps are per agent run. When a cap is reached, the agent stops and records the gap; it does not keep fishing. Time-box: if a source needs more than a couple of calls before producing anything useful, drop it and note why.
 
 ## Agent prompt template
 
@@ -9,7 +9,7 @@ Fill the placeholders and send one prompt per source. Keep the prompt self-conta
 ```text
 You are gathering <SOURCE> context for: <MODE> <ARGUMENT>.
 Known identifiers: <ticket key, PR number and URL, branch, title, people, window: since..until local>.
-Read-only: never post, comment, edit, resolve, or push; never touch a database; never read .env files.
+Read-only: the only file written is <OUTDIR>/<source>.md; never post, comment, edit, resolve, or push; never touch a database or read .env files.
 Use only these tools: <tools for this source>. Caps: <caps for this source>. Gate notes: <gates>.
 Relevance: an item counts only if it carries one of the identifiers, or it mentions the subject AND carries a
 decision or problem signal (a choice made, a bug reported, a constraint stated). Passing mentions do not count.
@@ -27,21 +27,21 @@ Every item needs a link. Private Slack: one summarized line plus the link, never
 Return at most 150 words: the 3 to 5 most important findings with links, and the gaps.
 ```
 
-## GitHub (haiku)
+## GitHub (haiku · low)
 
 Tool: `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts` only. All commands accept `--json`.
 
 | Mode | Calls |
 |---|---|
 | `pr` | `pr <arg> --json` (metadata, checks, reviewers, review threads with `isResolved` and `isOutdated`) |
-| `ticket` | `pr <branch or url>` for each PR linked from the issue (at most 3) |
+| `ticket` | `pr <branch or url>` for each PR linked from the ticket (at most 3) |
 | `window`, `person me` | `me --since <since> [--until <until>] --json` |
 | `person <other>` | `me --user <github login> --since <since> --json`. Pushes for another user are public events only. Find the login from the person's Slack or Linear profile; if none is listed, ask the user once. |
 | `incident`, `topic` | only `pr <url>` for PRs another source surfaced (at most 2) |
 
-Caps: at most 3 script calls. Classify review threads the way `explain` step 4 does (resolved explained, resolved unexplained, unresolved answered, unresolved no reply, outdated), quoting the reason or citing the commit; never invent a reason.
+Caps: at most 3 script calls. Classify review threads as (resolved explained, resolved unexplained, unresolved answered, unresolved no reply, outdated), quoting the reason or citing the commit; never invent a reason.
 
-## Linear (sonnet; haiku for a single `get_issue`; only when the Linear MCP is connected)
+## Linear (sonnet · medium; haiku · low for a single `get_issue`)
 
 Tools: Linear MCP `get_issue`, `list_comments`, `list_issues` (with filters such as assignee `me`, `updatedAt`, `query`), `get_user`, `list_users`.
 
@@ -50,7 +50,7 @@ Tools: Linear MCP `get_issue`, `list_comments`, `list_issues` (with filters such
 - `incident`, `topic`: `list_issues` with a text query (at most 2 queries), then `get_issue` on at most 3 hits that pass the relevance test.
 - If the MCP is not authenticated, stop and record the error; the main thread asks the user to run `/mcp`.
 
-## Slack (sonnet)
+## Slack (sonnet · medium)
 
 Tools: `slack_search_public_and_private`, `slack_search_public`, `slack_read_thread`, `slack_search_users`, `slack_read_user_profile`, `slack_list_user_channels`.
 
@@ -59,7 +59,7 @@ Tools: `slack_search_public_and_private`, `slack_search_public`, `slack_read_thr
 - `window`: `from:<@ME>` and `to:<@ME>` with `after:`/`before:` dates. `person`: resolve the user id with `slack_search_users`, then `from:<@ID>` in the window.
 - Caps: at most 4 search queries across both tiers, and at most 5 threads read. Nothing relevant after that: stop and say background was thin.
 
-## Notion (sonnet; only when the Notion MCP is connected)
+## Notion (sonnet · medium)
 
 Tools: `notion-search`, `notion-fetch`.
 
@@ -67,7 +67,7 @@ Tools: `notion-search`, `notion-fetch`.
 - Fetch linked docs first. Then at most 2 searches (ticket key, feature or module name) and at most 3 fetches in total. No hit in two searches: stop.
 - Record the doc title, its status if shown, its last edit date, and the specific sections that matter, with the link.
 
-## Wispr Flow: meetings and calendar (sonnet for meetings, haiku for calendar only)
+## Wispr Flow: meetings and calendar (sonnet · medium for meetings, haiku · low for calendar only)
 
 Tools: `search_meetings`, `get_meeting`, `search_scratchpad_notes`, `search_calendar_events`, `list_upcoming_meetings`, `get_meeting_participants_enriched`.
 
@@ -76,7 +76,7 @@ Tools: `search_meetings`, `get_meeting`, `search_scratchpad_notes`, `search_cale
 - Caps: at most 2 searches and 3 `get_meeting` calls. All times come back in UTC; convert them to local time before writing.
 - Write decisions and action items with their speaker, not whole transcripts.
 
-## Sentry (haiku for an id or URL, sonnet for a description)
+## Sentry (haiku · low for an id or URL, sonnet · medium for a description)
 
 Tools: `get_sentry_resource`, `search_issues`, `search_errors`, `search_traces`. Do not run `analyze_issue_with_seer` unless the user asks.
 
@@ -84,7 +84,7 @@ Tools: `get_sentry_resource`, `search_issues`, `search_errors`, `search_traces`.
 - With a description: at most 3 searches, then the top 2 matching issues.
 - Record the release or commit that first shows the error, so the GitHub agent can look at the matching PR.
 
-## Braintrust (sonnet)
+## Braintrust (sonnet · medium)
 
 Tools: `resolve_object`, `list_recent_objects`, `summarize_experiment`, `sql_query` (read-only queries). Load the relevant Braintrust workflow skill only if a query needs it.
 
@@ -92,7 +92,7 @@ Tools: `resolve_object`, `list_recent_objects`, `summarize_experiment`, `sql_que
 - Looking for the baseline a change tries to beat, or the production failure mode it fixes: failing spans, score changes, error rates, with permalinks.
 - Caps: at most 3 calls. Never write datasets, prompts, scorers, or automations.
 
-## Code (sonnet)
+## Code (sonnet · medium)
 
 Tools: Read, Grep, Glob, and read-only `git` (`git grep`, `git log`, `git blame`, `git ls-files`). Never run builds, tests, installs or scripts, and never read `.env` files.
 

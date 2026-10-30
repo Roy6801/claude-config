@@ -1,6 +1,6 @@
 # Ticket format and writing rules
 
-`spec` drafts ticket descriptions in this format too, so changes here must keep the two in step.
+`ship` writes each PR's ticket in this format, and `to-spec` output maps onto it.
 
 ## Description
 
@@ -21,7 +21,7 @@
 - [x] AC-2 <title, already met by the current code or PR>
 ```
 
-When a spec exists, it adds `## Non-goals`, `## Definition of done` (checkboxes) and, if any, `## Open questions` after the ACs, and links the PRD when there is one. A ticket without a spec may leave the AC ids out, but every AC is still a checkbox.
+When the text comes from `to-spec`, the ticket adds `## Non-goals`, `## Definition of done` (checkboxes) and, if any, `## Open questions` after the ACs, and links the PRD when there is one. A ticket without a spec may leave the AC ids out, but every AC is still a checkbox.
 
 ## Acceptance criteria
 
@@ -32,16 +32,10 @@ When a spec exists, it adds `## Non-goals`, `## Definition of done` (checkboxes)
 ## Titles
 
 - Name the feature or behavior the ticket delivers, so it reads the same alone or as part of a larger effort.
-- Sub-tickets: no "split", "part 1 of N", "PR A / PR B", "carve-off", or ordering words. Order lives in `blockedBy` relations and the parent link. Linear derives the branch name from the title, so a clean title keeps branch names clean.
+- Sub-tickets carry no ordering in the title. Order lives in `blockedBy` relations and the parent link. Linear derives the branch name from the title, so a clean title keeps branch names clean.
 - A child title describes only its own slice, never the parent's scope.
 
 ## Comments
 
 - Start and finish comments are short: what happened, links (PRs, docs, QA report), what is next or left out.
 - Quote error text and AC lines verbatim.
-
-## Voice
-
-- No em or en dashes. Use commas, "to", "so", "for", or shorter sentences.
-- Plain language, full sentences, no filler.
-- No AI attribution and no session links or ids.

@@ -1,21 +1,24 @@
 #!/usr/bin/env bun
 // PR mechanics for the ship skill: facts about a branch (base, commits, size, ticket, template,
-// existing PR) and creating or editing its PR. `facts` only reads. `upsert` creates DRAFT PRs or
+// existing PR) and creating or editing its PR. `facts` only reads. `upsert` creates PRs ready for review or
 // edits an existing PR's title, body and base; it never marks a PR ready, merges, or pushes.
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { ghEnv, localRepo, originRepo, repoConventions, stackOf, ticketKey, useAccountFor, type Local } from "../../../bin/gh-activity.ts";
 
-const WORK_DIR = process.env.SHIP_WORK_DIR || join(import.meta.dir, "..", "..", "..", "state", "work");
 const VALUE_FLAGS = new Set(["--branch", "--cwd", "--title", "--body-file", "--base"]);
-export const NET_BUDGET = 500;
+// Lines of code per PR: aim for NET_TARGET; NET_BUDGET (the target plus a buffer) is the ceiling. Tests sit outside the count.
+export const NET_TARGET = 200;
+export const NET_BUDGET = 250;
 // Not read line by line by a reviewer: lockfiles, generated files, changesets, snapshots.
 const EXCLUDED = [/(^|\/)[^/]*\.lock$/, /(^|\/)[^/]*-lock\.(json|yaml)$/, /(^|\/)pnpm-lock\.yaml$/, /\.gen\.[^/]+$/, /(^|\/)__generated__\//, /(^|\/)\.changeset\/[^/]+\.md$/, /\.snap$/];
+// Tests: counted on their own, outside the budget.
+const TESTS = [/\.(test|spec)\.[cm]?[jt]sx?$/, /(^|\/)__tests__\//, /(^|\/)(tests?|e2e)\//, /_test\.(go|py)$/, /(^|\/)test_[^/]+\.py$/];
 const ATTRIBUTION = [/claude\.ai\/code\/session/i, /Claude-Session:/i, /generated (with|by) (claude|ai)/i, /co-authored-by:\s*claude/i];
 
 type Args = { pos: string[]; flags: Map<string, string | true>; attach: string[] };
 type Base = { branch: string; source: "open-pr" | "gh-stack" | "integration-target" | "flag"; evidence: string };
-export type Size = { files: number; added: number; deleted: number; net: number; excluded: string[]; budget: number; over: boolean };
+export type Size = { files: number; added: number; deleted: number; net: number; tests: { files: number; added: number; deleted: number }; excluded: string[]; target: number; budget: number; aboveTarget: boolean; over: boolean };
 export type Template = { path: string | null; choices: string[] };
 type OpenPr = { number: number; url: string; isDraft: boolean; base: string; title: string };
 
@@ -89,10 +92,12 @@ async function gh(cwd: string, args: string[]) {
 // ---------- pure logic (unit tested) ----------
 
 export const isExcluded = (path: string) => EXCLUDED.some((re) => re.test(path));
+export const isTest = (path: string) => TESTS.some((re) => re.test(path));
 
 // `git diff --numstat` lines: "<added>\t<deleted>\t<path>"; binary files show "-".
 export function sizeOf(numstat: string, budget = NET_BUDGET): Size {
   let files = 0, added = 0, deleted = 0;
+  const tests = { files: 0, added: 0, deleted: 0 };
   const excluded: string[] = [];
   for (const line of numstat.split("\n")) {
     if (!line.trim()) continue;
@@ -103,12 +108,19 @@ export function sizeOf(numstat: string, budget = NET_BUDGET): Size {
       excluded.push(path);
       continue;
     }
+    const bucket = isTest(path) ? tests : null;
+    if (bucket) {
+      bucket.files++;
+      if (a !== "-") bucket.added += Number(a);
+      if (d !== "-") bucket.deleted += Number(d);
+      continue;
+    }
     files++;
     if (a !== "-") added += Number(a);
     if (d !== "-") deleted += Number(d);
   }
   const net = added - deleted;
-  return { files, added, deleted, net, excluded, budget, over: net > budget };
+  return { files, added, deleted, net, tests, excluded, target: NET_TARGET, budget, aboveTarget: net > NET_TARGET, over: net > budget };
 }
 
 // Repo-relative paths at the head ref, root and .github/docs only. `.github/` wins over docs/ and root.
@@ -130,7 +142,7 @@ export function chooseBase(pr: OpenPr | null, stack: { parent: string } | null, 
 
 export type UpsertPlan = { action: "create" | "edit"; argv: string[]; notes: string[] };
 
-// Decides the gh call for upsert. Never includes --ready, never toggles draft state.
+// Decides the gh call for upsert. Creates PRs ready for review; never toggles an existing PR's draft state.
 export function planUpsert(o: {
   repo: string; branch: string; title: string; bodyFile: string; base: string | null;
   pr: OpenPr | null; inStack: boolean; remoteHead: boolean; attach?: string[]; dryRun?: boolean;
@@ -145,7 +157,7 @@ export function planUpsert(o: {
     }
     return {
       action: "create",
-      argv: ["pr", "create", "--repo", o.repo, "--draft", "--assignee", "@me", "--head", o.branch, "--base", o.base, "--title", o.title, "--body-file", o.bodyFile, ...attachArgs(o.attach)],
+      argv: ["pr", "create", "--repo", o.repo, "--assignee", "@me", "--head", o.branch, "--base", o.base, "--title", o.title, "--body-file", o.bodyFile, ...attachArgs(o.attach)],
       notes,
     };
   }
@@ -239,23 +251,6 @@ async function templateAt(root: string, ref: string) {
   return findTemplate([...out.split("\n"), ...top.split("\n")].filter(Boolean));
 }
 
-// The pair slice whose branch is this one, from any initiative's pair.json.
-function sliceFor(branch: string) {
-  if (!existsSync(WORK_DIR)) return null;
-  for (const slug of readdirSync(WORK_DIR)) {
-    const file = join(WORK_DIR, slug, "pair.json");
-    if (!existsSync(file)) continue;
-    try {
-      const plan = JSON.parse(readFileSync(file, "utf8"));
-      const s = (plan.slices ?? []).find((x: { branch?: string }) => x.branch === branch);
-      if (s) return { slug, n: s.n as number, title: s.title as string, ticket: (s.ticket ?? null) as string | null, acs: (s.acs ?? []) as string[], status: s.status as string };
-    } catch {
-      warn(`${file} is not valid JSON`);
-    }
-  }
-  return null;
-}
-
 async function remoteState(root: string, branch: string) {
   if (!(await hasRef(root, `origin/${branch}`))) return { exists: false, ahead: null, behind: null };
   if (!(await hasRef(root, `refs/heads/${branch}`))) return { exists: true, ahead: 0, behind: 0 };
@@ -292,7 +287,6 @@ async function facts(args: Args) {
     commits = log.split("\n").filter(Boolean).map((l) => ({ sha: l.split("\t")[0]!, subject: l.split("\t").slice(1).join("\t") }));
     size = sizeOf(await git(root, "diff", "--numstat", `${ref}...${ctx.headRef}`));
   }
-  const slice = sliceFor(ctx.branch);
   const data = {
     repo: ctx.repo,
     branch: ctx.branch,
@@ -303,8 +297,7 @@ async function facts(args: Args) {
     stack: stack ? { trunk: stack.trunk, parent: stack.parent, branches: stack.branches } : null,
     commits,
     size,
-    ticket: ticketKey(ctx.branch, pr?.title) ?? slice?.ticket ?? null,
-    slice,
+    ticket: ticketKey(ctx.branch, pr?.title) ?? null,
     template: await templateAt(root, ctx.headRef),
     pr,
     otherPrs: others,
@@ -314,8 +307,8 @@ async function facts(args: Args) {
     console.log(`base      ${base.branch} (${base.source}): ${base.evidence}`);
     console.log(`remote    ${data.remote.exists ? `origin/${ctx.branch} ahead ${data.remote.ahead} behind ${data.remote.behind}` : "not pushed"}`);
     console.log(`commits   ${commits.length}${commits.length ? `: ${commits.map((c) => c.subject).slice(0, 5).join("; ")}${commits.length > 5 ? "; …" : ""}` : ""}`);
-    if (size) console.log(`size      ${size.files} files, +${size.added} -${size.deleted}, net ${size.net} of ${size.budget}${size.over ? " OVER BUDGET" : ""}${size.excluded.length ? ` (${size.excluded.length} excluded)` : ""}`);
-    console.log(`ticket    ${data.ticket ?? "none"}${slice ? `  (slice ${slice.n} of ${slice.slug}: ${slice.title})` : ""}`);
+    if (size) console.log(`size      ${size.files} files, +${size.added} -${size.deleted}, net ${size.net} (target ${size.target}, ceiling ${size.budget})${size.over ? " OVER BUDGET" : size.aboveTarget ? " above target" : ""}, tests +${size.tests.added} -${size.tests.deleted} outside the count${size.excluded.length ? ` (${size.excluded.length} excluded)` : ""}`);
+    console.log(`ticket    ${data.ticket ?? "none"}`);
     console.log(`template  ${data.template.path ?? (data.template.choices.length ? `choose one: ${data.template.choices.join(", ")}` : "none")}`);
     console.log(`pr        ${pr ? `#${pr.number} ${pr.isDraft ? "draft" : "ready"} -> ${pr.base}  ${pr.url}` : "none open"}`);
   });
@@ -364,10 +357,10 @@ async function upsert(args: Args) {
 const USAGE = `usage: pr <command>   (run inside the repo or one of its worktrees)
   facts [--branch <b>] [--cwd <dir>] [--json]
         branch, base (open PR > gh stack parent > integration target), push state, commits since base,
-        size (net lines vs ${NET_BUDGET}, lockfiles/generated/changesets excluded), ticket key,
-        pair slice, PR template, existing open PR
+        size (net lines of code, target ${NET_TARGET}, ceiling ${NET_BUDGET}; tests counted apart;
+        lockfiles/generated/changesets excluded), ticket key, PR template, existing open PR
   upsert --title <t> --body-file <f> [--base <b>] [--attach ./<file>[#alt]]... [--branch <b>] [--cwd <dir>] [--dry-run] [--json]
-        create a DRAFT PR, or edit the open PR's title/body (and base, outside a gh stack);
+        create a PR ready for review, or edit the open PR's title/body (and base, outside a gh stack);
         --attach uploads an image or video that sits next to the body file and that the body
         references as ](./<file>); never marks ready, never pushes`;
 

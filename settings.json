@@ -1,7 +1,8 @@
 {
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "DISABLE_ZOXIDE": "1"
+    "DISABLE_ZOXIDE": "1",
+    "COMPUTER_USE_CODEX_LAUNCHER_PATH": "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
   },
   "attribution": {
     "commit": "",
@@ -112,13 +113,13 @@
         ]
       }
     ],
-    "SessionStart": [
+    "PostToolUse": [
       {
-        "matcher": "compact",
+        "matcher": "ExitPlanMode",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/post-compact.js\"",
+            "command": "node \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/plan-approved.js\"",
             "timeout": 5
           }
         ]
@@ -132,11 +133,9 @@
   "enabledPlugins": {
     "context7@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
     "feature-dev@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
-    "commit-commands@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
     "slack@claude-plugins-official": true,
@@ -145,22 +144,17 @@
     "vercel@claude-plugins-official": true,
     "linear@claude-plugins-official": true,
     "firecrawl@claude-plugins-official": true,
-    "caveman@caveman": true,
     "safety-net@cc-marketplace": false,
     "figma@claude-plugins-official": true,
     "expo@claude-plugins-official": true,
     "composio@composio": true,
     "notion@claude-plugins-official": true,
     "sentry@claude-plugins-official": true,
-    "betterstack@betterstack": true
+    "betterstack@betterstack": true,
+    "claude-codex-computer-use@songkeys": true,
+    "pr-review-toolkit@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
-    "caveman": {
-      "source": {
-        "source": "github",
-        "repo": "JuliusBrussee/caveman"
-      }
-    },
     "cc-marketplace": {
       "source": {
         "source": "github",
@@ -177,6 +171,12 @@
       "source": {
         "source": "github",
         "repo": "BetterStackHQ/claude-plugin"
+      }
+    },
+    "songkeys": {
+      "source": {
+        "source": "github",
+        "repo": "songkeys/claude-codex-computer-use"
       }
     }
   },

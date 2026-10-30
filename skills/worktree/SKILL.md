@@ -1,10 +1,6 @@
 ---
 name: worktree
-description: |
-  This is the default approach for git worktrees. It manages creating a worktree for a branch or a scratch checkout of a commit under ~/worktrees/<project>/<name>, copying and checking env files, install and codegen, the launch command for a new session, listing worktrees with their flags, removing them, and pruning merged, gone, stale and orphan ones. One deterministic script (`wt`) owns every git and gh sequence.
-
-  Use when: opening a worktree for a branch, starting a parallel session, a scratch checkout to test a PR or commit, env files missing or out of date in a worktree, listing worktrees, cleaning up, removing or pruning worktrees, or a branch merged and its worktree is done.
-user-invocable: true
+description: "Git worktrees under ~/worktrees/<project>/ through the wt script. Use when creating a worktree or a scratch checkout of a PR or commit, fixing a worktree's env files, or listing, removing or pruning worktrees."
 metadata:
   origin: local
 ---
@@ -15,7 +11,7 @@ A worktree lives at `~/worktrees/<project>/<name>/` and is opened in a separate 
 
 ## Running the script
 
-`wt` means `bun <base directory of this skill>/scripts/wt.ts`. Use the "Base directory for this skill" path shown when the skill loaded. Run it from the repo or any of its worktrees; `ls --all`, `prune --all` and `rm <absolute path>` also work outside a repo.
+`wt` means `bun <base directory of this skill>/scripts/wt.ts`. Use the "Base directory for this skill" path shown when the skill loaded. Run it from the repo or any of its worktrees; `ls --all`, `prune --all` and `rm <absolute path>` also work outside a repo. The project is the origin repo name (e.g. `saas`, not `SaaS`).
 
 Every command takes `--json`. Failures print one line to stderr and exit 1. Warnings go to stderr and into the JSON `warnings` array; relay them. If the script cannot do a step, say so and leave raw git and gh out of it.
 
@@ -34,7 +30,7 @@ Every command takes `--json`. Failures print one line to stderr and exit 1. Warn
 
 ## Creating
 
-The branch name follows the branching rule in CLAUDE.md and is confirmed with the user before `wt new`. The base defaults to `origin/<integration target>`, discovered with `bun $CLAUDE_CONFIG_DIR/bin/gh-activity.ts target`; `--base` picks another ref. `wt new` always makes a worktree.
+The branch name follows the branching rule in CLAUDE.md, taken from the ticket when there is one. `wt new` bases on origin/<integration target>; `--base` overrides. `wt new` always makes a worktree.
 
 `wt new` fetches, reuses an existing worktree for the branch, creates the worktree, syncs env files (below), installs with `ni` and runs codegen with `nr`. A new branch has no upstream. If install fails the worktree is kept and the retry command is printed; relay it.
 
@@ -50,7 +46,7 @@ The branch name follows the branching rule in CLAUDE.md and is confirmed with th
 
 ## Confirmation rules
 
-- Confirm the branch name before `wt new`.
+- `wt env --overwrite`: only after the user agrees.
 - `wt new`: if the folder exists as an orphan, the script refuses; show it and ask before `wt rm <path> --force`.
 - `wt rm`: confirm the exact targets first. The script refuses a dirty worktree and lists `status -s`; show that list and get an explicit yes before rerunning with `--force`.
 - `--delete-branch`: confirm separately. If git refuses (not merged), report it and keep the branch.
@@ -66,8 +62,3 @@ Flags: `detached` (no branch), `harness`, `merged` (pushed branch contained in t
 ## Handoff
 
 After `wt new`, tell the user to open a new terminal and run the printed `next` command (`cd <path> && <launch>`, built by `bin/launch.ts`). This session stays where it is and starts no work in the worktree unless the user asks.
-
-## Conventions
-
-- Worktree location is `~/worktrees/<project>/<name>/`; the project comes from the origin remote name (e.g. `saas`, not `SaaS`).
-- The package manager is auto-detected by `ni`/`nr`.

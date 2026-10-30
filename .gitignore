@@ -25,15 +25,17 @@
 !hooks/
 !hooks/deny-env-read.sh
 
-# Workflow scripts, nested skill references
+# Workflow scripts, shared references, nested skill references
 !bin/
 !bin/*.ts
+!references/
+!references/*.md
 !skills/*/references/**
 !skills/*/agents/
 !skills/*/agents/*
 
 # Own hooks
 !hooks/db-guard.js
-!hooks/post-compact.js
+!hooks/plan-approved.js
 !hooks/lib/
 !hooks/lib/*.js
