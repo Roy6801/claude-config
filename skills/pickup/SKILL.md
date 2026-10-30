@@ -28,7 +28,7 @@ metadata:
    - Resolve the roadmap folder from the project and slug; for `#<number>`, find the `roadmap.md` under `~/roadmaps/<project>/` that lists the PR's branch.
    - Read `roadmap.md`, `handoff.md` and `wiki/index.md`; pick the PR (named, or from the Next line).
 2. **State** (sequential)
-   - `general-purpose · haiku · low`: report the PR's status from `roadmap.md` and its state from `prs/<pr-name>/` (whether `plan.md` exists) and `gh pr view` (number, merged); for a PR in a stack, sync the stack first per the `gh-stack` skill so merged lower layers and rebases are current.
+   - `general-purpose · haiku · low`: report the PR's status from `roadmap.md` and its state from `prs/<pr-name>/` (whether `plan.md` or `plan-draft.md` exists) and `gh pr view` (number, merged); for a PR in a stack, sync the stack first per the `gh-stack` skill so merged lower layers and rebases are current.
 3. **Route** (sequential)
    - Check the status against its proof in the roadmap states first; route on the status the proof supports.
    - Merged: mark it merged in `roadmap.md`, move the Next line to the following PR, and return to step 2 for that PR.
@@ -39,9 +39,9 @@ metadata:
    - Not planned, or `pr plan approved` without `prs/<pr-name>/plan.md`: `general-purpose · haiku · low` sets the status to `planned` and the Next line to "Plan <pr-name> with /pickup <slug>"; then step 4.
 4. **Plan** (sequential)
    - Call `EnterPlanMode` before any planning dispatch, every time, re-entries included.
-   - `Plan · opus · high`: read `hld.md`, the PR's entry in `roadmap.md`, `wiki/index.md` and the code; draft the PR plan per `references/templates.md`, first line `<!-- pr: <project>/<slug>/<pr-name> -->`. Each part follows the skills for its kind, as `$CLAUDE_CONFIG_DIR/skills/kickoff/references/hld.md` lists them; each commit names the skills its implementer follows.
-   - Write the plan file from the draft, present it, and revise it with the user until approved.
+   - `Plan · opus · high`: read `hld.md`, the PR's entry in `roadmap.md`, `wiki/index.md`, `prs/<pr-name>/plan-draft.md` when one exists, and the code; draft the PR plan per `references/templates.md`, first line `<!-- pr: <project>/<slug>/<pr-name> -->`. Each part follows the skills for its kind, as `$CLAUDE_CONFIG_DIR/skills/kickoff/references/hld.md` lists them; each commit names the skills its implementer follows.
+   - Write the plan file from the draft, present it, and revise it with the user until approved. A plan drafted here for another PR (a split, a later PR) goes to that PR's `prs/<other-pr>/plan-draft.md`.
    - Gate: within the PR size budget (CLAUDE.md), or a split the user chose; the user approves through `ExitPlanMode`.
-   - `general-purpose · haiku · low`: confirm `prs/<pr-name>/plan.md` exists (the plan hook saves it on approval); set the PR's status to `pr plan approved` and the Next line to "Ship <pr-name>" in `roadmap.md`.
+   - `general-purpose · haiku · low`, given the approved plan file's path from the `ExitPlanMode` result: confirm `prs/<pr-name>/plan.md` matches it (the plan hook saves it on approval), and when it does not, copy the plan file there and report that the hook missed it; delete `prs/<pr-name>/plan-draft.md`; set the PR's status to `pr plan approved` and the Next line to "Ship <pr-name>" in `roadmap.md`.
 5. **End** (sequential)
    - Tell the user: "Next: a fresh chat, then `/ship <slug> <pr-name>`."

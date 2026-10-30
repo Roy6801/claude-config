@@ -64,13 +64,14 @@ The single list of PR statuses. Kickoff, handoff, pickup and ship check a status
 | Status | Proof | Set by |
 | --- | --- | --- |
 | `planned` | the PR's record in `roadmap.md` | kickoff (Save plan); pickup when a later status lacks its proof |
-| `pr plan approved` | `prs/<pr-name>/plan.md` | pickup (Plan), after the user approves the PR plan |
+| `pr plan approved` | the status and `prs/<pr-name>/plan.md` | pickup (Plan), after the user approves the PR plan |
 | `building (step <n> passed)` | `prs/<pr-name>/plan.md` and `brief.md`, the branch in `roadmap.md` | ship |
 | `ready #<n> (step <n> passed)` | PR #<n> open (`gh pr view`) | ship |
 | `ready #<n> (shipped)` | PR #<n> open, ship's End done | ship |
 | `merged` | PR #<n> merged (`gh pr view`) | pickup |
 
 - A status whose proof is missing is wrong: fall back to the latest status whose proof exists, and say so.
+- `prs/<pr-name>/plan.md` holds only an approved plan. A PR plan drafted before its approval (a split, a later PR planned early) lives at `prs/<pr-name>/plan-draft.md` and becomes `plan.md` on approval.
 - The `**Next:**` line and `handoff.md` name a step only when its input exists: `/ship` needs `prs/<pr-name>/plan.md`; a `planned` PR's next step is "Plan <pr-name> with /pickup <slug>".
 
 ## hld.md

@@ -22,10 +22,15 @@ function readInput() {
   }
 }
 
-function planText(toolInput) {
-  const file = toolInput.planFilePath;
+// The approved plan lives in tool_response; tool_input can arrive empty or hold an
+// earlier plan when one session plans several PRs.
+function planText(input) {
+  const res = input.tool_response || {};
+  const req = input.tool_input || {};
+  if (res.plan) return res.plan;
+  const file = res.filePath || req.planFilePath;
   if (file && fs.existsSync(file)) return fs.readFileSync(file, 'utf8');
-  return toolInput.plan || '';
+  return req.plan || '';
 }
 
 function save(file, text) {
@@ -35,7 +40,7 @@ function save(file, text) {
 
 function main() {
   const input = readInput();
-  const plan = planText(input.tool_input || {});
+  const plan = planText(input);
   if (!plan) return;
 
   const marker = plan.match(/<!--\s*(roadmap|pr):\s*([^\s>]+)\s*-->/);
