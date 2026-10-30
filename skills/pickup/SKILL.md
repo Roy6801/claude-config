@@ -13,6 +13,8 @@ metadata:
 - `/pickup <slug> <pr-name>`: continue one PR.
 - `/pickup #<number>`: continue a GitHub PR.
 - Reads and routes. Execution happens in `/ship`, in a fresh chat.
+- A correction or redirect from the user after End (such as "plan the first PR") re-enters this file at Route or Plan and follows its steps.
+- Statuses and the Next line follow the roadmap states in `$CLAUDE_CONFIG_DIR/skills/kickoff/references/templates.md`.
 
 ## Chief of staff
 
@@ -26,19 +28,20 @@ metadata:
    - Resolve the roadmap folder from the project and slug; for `#<number>`, find the `roadmap.md` under `~/roadmaps/<project>/` that lists the PR's branch.
    - Read `roadmap.md`, `handoff.md` and `wiki/index.md`; pick the PR (named, or from the Next line).
 2. **State** (sequential)
-   - `general-purpose · haiku · low`: report the PR's status from `roadmap.md` and its state from `prs/<pr-name>/` and `gh pr view` (number, merged); for a PR in a stack, sync the stack first per the `gh-stack` skill so merged lower layers and rebases are current.
+   - `general-purpose · haiku · low`: report the PR's status from `roadmap.md` and its state from `prs/<pr-name>/` (whether `plan.md` exists) and `gh pr view` (number, merged); for a PR in a stack, sync the stack first per the `gh-stack` skill so merged lower layers and rebases are current.
 3. **Route** (sequential)
+   - Check the status against its proof in the roadmap states first; route on the status the proof supports.
    - Merged: mark it merged in `roadmap.md`, move the Next line to the following PR, and return to step 2 for that PR.
    - No PR left: tell the user the roadmap is complete and move it to `_done/` with its merged worktrees removed (CLAUDE.md), then End.
    - Build stopped partway: copy `/ship <slug> <pr-name> from <step>`, the step read from the roadmap status, then End.
    - Shipped (`ready #<n> (shipped)`), not merged: tell the user it awaits their review and merge, then End.
-   - Plan approved, nothing built: copy `/ship <slug> <pr-name>`, then End.
-   - Not planned: step 4.
+   - `pr plan approved` with `prs/<pr-name>/plan.md`, nothing built: copy `/ship <slug> <pr-name>`, then End.
+   - Not planned, or `pr plan approved` without `prs/<pr-name>/plan.md`: `general-purpose · haiku · low` sets the status to `planned` and the Next line to "Plan <pr-name> with /pickup <slug>"; then step 4.
 4. **Plan** (sequential)
-   - Call `EnterPlanMode`.
+   - Call `EnterPlanMode` before any planning dispatch, every time, re-entries included.
    - `Plan · opus · high`: read `hld.md`, the PR's entry in `roadmap.md`, `wiki/index.md` and the code; draft the PR plan per `references/templates.md`, first line `<!-- pr: <project>/<slug>/<pr-name> -->`. Each part follows the skills for its kind, as `$CLAUDE_CONFIG_DIR/skills/kickoff/references/hld.md` lists them; each commit names the skills its implementer follows.
    - Write the plan file from the draft, present it, and revise it with the user until approved.
    - Gate: within the PR size budget (CLAUDE.md), or a split the user chose; the user approves through `ExitPlanMode`.
-   - `general-purpose · haiku · low`: set the PR's status to plan approved and the Next line to "Ship <pr-name>" in `roadmap.md`.
+   - `general-purpose · haiku · low`: confirm `prs/<pr-name>/plan.md` exists (the plan hook saves it on approval); set the PR's status to `pr plan approved` and the Next line to "Ship <pr-name>" in `roadmap.md`.
 5. **End** (sequential)
    - Tell the user: "Next: a fresh chat, then `/ship <slug> <pr-name>`."

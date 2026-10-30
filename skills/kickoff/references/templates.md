@@ -55,9 +55,23 @@ Sections per `references/hld.md` for the kind of work.
 
 ### <pr-name> (<status>)
 - Does, size, branch (empty until `ship` records it), base or stack parent, ticket when known, evidence.
-
-Status is one of `planned | plan approved | building (step <n> passed) | ready #<n> (step <n> passed) | ready #<n> (shipped) | merged`.
 ```
+
+## Roadmap states
+
+The single list of PR statuses. Kickoff, handoff, pickup and ship check a status against its proof here before trusting or writing it.
+
+| Status | Proof | Set by |
+| --- | --- | --- |
+| `planned` | the PR's record in `roadmap.md` | kickoff (Save plan); pickup when a later status lacks its proof |
+| `pr plan approved` | `prs/<pr-name>/plan.md` | pickup (Plan), after the user approves the PR plan |
+| `building (step <n> passed)` | `prs/<pr-name>/plan.md` and `brief.md`, the branch in `roadmap.md` | ship |
+| `ready #<n> (step <n> passed)` | PR #<n> open (`gh pr view`) | ship |
+| `ready #<n> (shipped)` | PR #<n> open, ship's End done | ship |
+| `merged` | PR #<n> merged (`gh pr view`) | pickup |
+
+- A status whose proof is missing is wrong: fall back to the latest status whose proof exists, and say so.
+- The `**Next:**` line and `handoff.md` name a step only when its input exists: `/ship` needs `prs/<pr-name>/plan.md`; a `planned` PR's next step is "Plan <pr-name> with /pickup <slug>".
 
 ## hld.md
 

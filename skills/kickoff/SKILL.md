@@ -17,7 +17,7 @@ metadata:
 - A part above the PR size budget (CLAUDE.md) goes under `## Size decisions`: split points, size of each piece, two options (independent PRs, stacked PRs, the stack's layers designed per the `gh-stack` skill's `references/stack-design.md`), a recommendation. The user decides each one.
 - Each PR has one independent scope, is built from atomic commits, and has a stable kebab-case name.
 - Linear tickets found in context attach to their PRs, and a parent ticket is recorded in `roadmap.md`. New PR tickets are created by `ship` at Start.
-- Each PR gets a record in `roadmap.md`: name, branch, base or stack parent, ticket when known, status (list in `references/templates.md`).
+- Each PR gets a record in `roadmap.md`: name, branch, base or stack parent, ticket when known, status (the roadmap states in `references/templates.md`).
 
 ## HLD
 
@@ -54,7 +54,7 @@ metadata:
    - Write the plan file with the size findings applied (the one write plan mode keeps out of subagents), present it, and revise it with the user.
    - Gate: every size decision answered; the user approves through `ExitPlanMode`.
 6. **Save plan** (after approval)
-   - `general-purpose · sonnet · medium`: split `plan.md` into `roadmap.md` and `hld.md` per `references/templates.md`; ingest the decisions settled while planning into the wiki.
-   - Gate: `roadmap.md` holds the Next line, the parent ticket when one exists, and every PR's record, `hld.md` exists, `wiki/index.md` lists every decision.
+   - `general-purpose · sonnet · medium`: split `plan.md` into `roadmap.md` and `hld.md` per `references/templates.md`, every PR's status `planned` (the approved roadmap plans no PR yet) and the Next line "Plan <first pr-name> with /pickup <slug>"; ingest the decisions settled while planning into the wiki.
+   - Gate: `roadmap.md` holds the Next line, the parent ticket when one exists, and every PR's record with status `planned`, `hld.md` exists, `wiki/index.md` lists every decision.
 7. **End** (sequential)
    - Tell the user: "Roadmap saved. Next: `/handoff`."

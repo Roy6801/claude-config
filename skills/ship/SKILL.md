@@ -19,7 +19,7 @@ metadata:
 - **Ticket:** the PR's Linear ticket is created or updated at Start and refreshed at End when scope moved; these writes are pre-approved inside ship.
 - **PR:** the labels and body shape come from `~/roadmaps/<project>/repo.md`. Without a profile, build it from the repo (label descriptions, workflows that trigger on labels, the PR bot or template) and the user's recent PRs, confirm it with the user once, and save it.
 - **PR body:** ours, in the repo profile's shape, including any marker it names.
-- **Status:** at each gate, set the PR's status in `roadmap.md`: `building (step <n> passed)` before the PR exists, `ready #<n> (step <n> passed)` after, and `ready #<n> (shipped)` at End.
+- **Status:** at each gate, set the PR's status in `roadmap.md`: `building (step <n> passed)` before the PR exists, `ready #<n> (step <n> passed)` after, and `ready #<n> (shipped)` at End. Check each status against its proof in the roadmap states (`$CLAUDE_CONFIG_DIR/skills/kickoff/references/templates.md`) before trusting or writing it.
 - **Evidence:** per `references/evidence.md`, attached in the body with `pr upsert --attach`.
 - **Scripts:** `pr` is `bun <this skill's directory>/scripts/pr.ts` (`facts` for the base, template, ticket and open PR; `upsert` to create or edit the PR).
 
@@ -34,6 +34,7 @@ metadata:
 
 1. **Start** (sequential)
    - Resolve the roadmap folder; save the pasted plan to `prs/<pr-name>/plan.md` when the hook has not.
+   - With no pasted plan and no `prs/<pr-name>/plan.md`, stop and tell the user to plan it with `/pickup <slug> <pr-name>`. `roadmap.md` and `hld.md` alone are never a plan to build from.
    - `general-purpose · sonnet · medium`: create or update the PR's ticket through `ticket` from the plan (title, description, acceptance criteria), linked to the roadmap's parent ticket; record the ticket and its `gitBranchName` as the branch in `roadmap.md`. Without a ticket (Linear unavailable), derive the branch per CLAUDE.md's prefix rule.
    - `general-purpose · haiku · low`: check the account (CLAUDE.md); open the branch through `wt`: reuse the worktree already open for it, else `wt new <branch> --base <base>` with no further confirmation, the base being the stack parent, else the integration target from `pr facts`; for a PR with a stack parent, register the branch on top of its parent's stack per the `gh-stack` skill; report the worktree path, used from here on.
    - `general-purpose · sonnet · medium`: write `brief.md`: repo, branch, base, diff command against the merge base, check commands (discovered from the repo's scripts), requirements from the plan, scope and size budget, settled wiki items, pointers to `hld.md` and the wiki index, the app URL.
@@ -66,6 +67,6 @@ metadata:
 7. **End** (sequential)
    - `general-purpose · sonnet · high`: write the final body from the final diff, keeping the Evidence section, and check every statement in it against that diff; run `humanizer` on it; `pr upsert`.
    - When folds or stacks moved scope, `general-purpose · sonnet · medium` updates the ticket through `ticket`.
-   - `general-purpose · sonnet · medium`: ingest what this PR settled into the wiki (decisions, HLD notes, collisions and how they were resolved, user corrections), dated and citing the PR folder; set the PR's status to `ready #<n> (shipped)` and the Next line in `roadmap.md` to the following PR.
+   - `general-purpose · sonnet · medium`: ingest what this PR settled into the wiki (decisions, HLD notes, collisions and how they were resolved, user corrections), dated and citing the PR folder; set the PR's status to `ready #<n> (shipped)` and the Next line in `roadmap.md` to the following PR's next step per the roadmap states.
    - Copy `/pickup <slug>`.
    - Tell the user: the PR link, one line on what it does, the loop and QA summaries, requirements left without evidence and why, anything else noted for them, and that `/pickup <slug>` is on the clipboard.

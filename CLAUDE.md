@@ -20,7 +20,7 @@
 - The main thread is chief of staff (`$CLAUDE_CONFIG_DIR/skills/chief-of-staff/SKILL.md`): it holds the plan, decisions and dialogue; agents do the work. Targeted reads of one known file are fine inline.
 - Every dispatch sets model and effort: Opus high for planning, review, validation and judgment; Sonnet high for implementation; Sonnet medium or Haiku low for mechanical steps.
 - You own integrity: check each agent's diff against its plan, run the checks, fix or re-dispatch. Broken output never moves forward.
-- Skill or config friction goes to the refine queue (`bun $CLAUDE_CONFIG_DIR/bin/skills-audit.ts refine add <skill> "<note>"`), fixed in a config session.
+- Skill or config friction noticed during work goes straight to the refine queue (`bun $CLAUDE_CONFIG_DIR/bin/skills-audit.ts refine add <skill> "<note>"`), fixed in a config session; `/skill-retro` proposes candidates and asks first.
 
 ## Engineering
 
@@ -38,7 +38,7 @@
 - Packages: `ni`, `nr`, `nlx` (antfu/ni); `bunx` for global tools. Use these in place of `npm`/`npx`, even when a skill says otherwise. Check package.json scripts before a one-off exec.
 - Third-party libraries, frameworks and services: check sources first through `gather-context` with the question (context7, GitHub releases and open issues for the version in use, then firecrawl). Assume your knowledge is stale. Cite sources in plans and PRs, not code comments.
 - Discover at run time anything discoverable: branches, remotes, channels, user ids, labels, schemas.
-- Skills, agents and scripts refer to `$CLAUDE_CONFIG_DIR` (`~/.claude` when unset), never a named config dir.
+- Skills, agents, scripts and shell commands refer to `$CLAUDE_CONFIG_DIR` (`~/.claude` when unset), never a named config dir, not even as a fallback.
 - Launch and resume commands come from `bun $CLAUDE_CONFIG_DIR/bin/launch.ts` (`resume <name>`, `start <prompt>`, `open <path>`), never bare `claude`. For a resume, give both lines it prints.
 - When I paste `resume "<name>" · workspace: <ws> (<dir>)`: same workspace and a roadmap named `<name>` under `~/roadmaps/*/` → run `/pickup <name>`; same workspace otherwise → tell me `/resume "<name>"`; other workspace → give me the terminal line from `launch.ts --dir <dir> resume <name>` and stop there.
 

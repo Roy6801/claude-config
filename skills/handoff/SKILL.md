@@ -25,9 +25,10 @@ metadata:
    - Read its `roadmap.md`, `handoff.md` and `wiki/index.md`.
 2. **Record** (sequential)
    - List what this session learned that the folder lacks: decisions, user corrections, findings, PR status changes, the next step.
-   - `general-purpose · sonnet · medium`: ingest the decisions, corrections and findings into the wiki (dated pages citing their sources, listed in `wiki/index.md`); update the PR statuses and the `**Next:**` line in `roadmap.md`.
+   - `general-purpose · sonnet · medium`: ingest the decisions, corrections and findings into the wiki (dated pages citing their sources, listed in `wiki/index.md`); update the PR statuses and the `**Next:**` line in `roadmap.md`, each checked against the roadmap states in `$CLAUDE_CONFIG_DIR/skills/kickoff/references/templates.md` and the files in `prs/`.
    - Gate: every listed item is in the wiki or `roadmap.md`.
 3. **Note** (sequential)
+   - Derive the next action from the `**Next:**` line and `prs/`; `/ship` only for a PR with `prs/<pr-name>/plan.md`. When it and the Next line disagree, stop and ask the user which holds.
    - Rewrite `handoff.md`, the roadmap's only note, at most 20 lines of bullets: where things stand, what is half-done (for a PR mid-ship, the last ship step passed), the next action, open questions, and paths to read. Point at files; leave goal, PR list and decisions to `roadmap.md` and the wiki.
 4. **End** (sequential)
    - Copy `/pickup <slug>` with `pbcopy`.
