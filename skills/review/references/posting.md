@@ -7,7 +7,7 @@ Used by `review` for comments and edits on someone else's PR, and by `review-fix
 A batch is everything one approval covers and the API calls in `api.md` send:
 
 - **Comments** (`review`): validated findings (`validation.md`), posted as one review: inline comments plus an optional summary body.
-- **Replies** (`review-fix-loop`): one reply per thread on the user's own PR, each starting with its label (`Fixed in <sha>:`, `Discussed:`, `Won't Fix:`).
+- **Replies** (`review-fix-loop`): one reply per thread on the user's own PR, each starting with its label (`Fixed in <sha>:`, `Follow-up in <ticket>:`, `Discussed:`, `Won't Fix:`).
 - **Edit** (`review edit`): an in-place edit of one posted comment, review body or top-level comment.
 
 ## Drafting
@@ -18,12 +18,13 @@ One comment per finding, anchored to the lines it is about; small items get thei
 - **Link properly.** Tickets in the form the repo already uses (take it from the PR body). Code in other files as SHA-pinned permalinks, `https://github.com/{owner}/{repo}/blob/{sha}/{path}#L{start}-L{end}`; the anchored lines are already in view.
 - **Severity labels** only when there are enough comments that the author must prioritise, or something is a `blocker`. Below that, the consequence sentence carries the weight.
 - **Suggested fixes** per `fixes.md`, verified against the head SHA before they are shown.
-- **Replies** start with their label, then one or two sentences: what changed and where (with the commit sha), the answer, or the rationale with its evidence, written to persuade.
+- **Replies** start with their label, then one or two sentences: what changed and where (with the commit sha), the answer, or why it stays as is, with its evidence.
 
 ### Voice
 
 The user's voice is in CLAUDE.md. On top of it:
 
+- Humble, like a regular colleague, on any PR: acknowledge a right point plainly ("Good catch.", "You're right, this was off."), own a mistake without over-apologising, state a concern or a reason directly and respectfully, and stay open to the other view. Leave out selling and gratitude formulas: never thank a bot, and thank a person only when something genuinely earns it.
 - State facts directly, without the tooling that found them.
 - An `ask` finding names the likely objection.
 - Post only comments worth an answer, unranked.
@@ -62,7 +63,7 @@ Post only the exact batch the user approved. Preconditions, checked before any w
 - The active `gh` login is the user's account for this org (reviewing needs no push access); on a mismatch, stop and show both with the switch command.
 - The head SHA still matches the PR. When the branch moved, re-verify anchors and suggested fixes and show the batch again.
 
-Then post per `api.md`: comments once, as a single review with the stated event; replies one per thread, stopping at the first failure. Resolve a thread only on the user's own PR, after its reply landed and the user said yes for that thread; threads on someone else's PR are theirs to resolve. Afterwards verify that every comment landed under the user's login at the intended place, and report the links and anything refused or failed.
+Then post per `api.md`: comments once, as a single review with the stated event; replies one per thread, stopping at the first failure. Resolve a thread only on the user's own PR, after its reply landed and the user said yes (one "Resolve all" covers every listed thread); threads on someone else's PR are theirs to resolve. Afterwards verify that every comment landed under the user's login at the intended place, and report the links and anything refused or failed.
 
 ## Editing what is already posted
 

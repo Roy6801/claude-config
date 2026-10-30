@@ -9,8 +9,9 @@ metadata:
 # Review-fix loop
 
 - `/review-fix-loop #<number> [rounds]`: on an open PR, with its reviewer and bot threads.
-- From `ship`: on ship's branch, using ship's `brief.md`.
-- Rounds: 4 unless a count is given. Each round runs every step; a step with nothing to do passes through.
+- From `ship`: on ship's PR, open since ship's Raise step, using ship's `brief.md`; every "On a PR" step applies (threads, monitor, pushes, End replies and resolution).
+- Rounds: at most 3 unless a count is given. Each round runs every step; a step with nothing to do passes through.
+- Stop: a round whose validated plan has nothing to fix, fold or stack is clean, and the loop ends after it. When the cap ends the loop on a round that applied fixes, the Final pass reviews them.
 - Output: `prs/<pr-name>/round-<n>/` in the roadmap folder (`~/roadmaps/<project>/<slug>/`, the roadmap whose `roadmap.md` lists the branch); for a PR outside any roadmap, `~/roadmaps/<project>/pr-<number>/`.
 
 ## Rules
@@ -22,7 +23,7 @@ metadata:
 - **Commits:** atomic; a conventional title and a short description of the change only.
 - **On a PR:** push after every round (`git push --no-verify`); fixes land as new commits. When the PR is a stack layer with layers above it, rebase and push those layers per the `gh-stack` skill after each round.
 - **Tickets:** creating a stacked PR's ticket is pre-approved; every other Linear write needs the user's OK.
-- **Monitor (on a PR):** new comments from bots and people join the next round's review. Comments that land after the last round's Review step are reported at End with an offer of another round.
+- **Monitor (on a PR):** new comments from bots and people join the next round's review. Comments that land after the last Review step are reported at End with an offer of another round.
 - **PR body (on a PR):** owned by us, in the shape in `~/roadmaps/<project>/repo.md`, its keep marker on the first line.
 
 ## Chief of staff
@@ -36,16 +37,15 @@ metadata:
 
 1. **Start** (sequential)
    - From ship: use ship's `brief.md`.
-   - On a PR: read the base and branch with `gh pr view`; write `brief.md`: diff command against the merge base, check commands, requirements (the PR plan, else the ticket), scope and budget, settled wiki items, and pointers to `hld.md` and the wiki index.
+   - Standalone: read the base and branch with `gh pr view`; write `brief.md`: diff command against the merge base, check commands, requirements (the PR plan, else the ticket), scope and budget, settled wiki items, and pointers to `hld.md` and the wiki index.
    - On a PR: start the monitor with `Monitor`; pull the unresolved threads into the round 1 queue.
 2. **Round n** (sequential, rounds 1 to N)
-   1. `general-purpose · sonnet · medium`: run `deslop` on the diff, editing the code.
-   2. `general-purpose · sonnet · high`: run `/simplify` on the diff, editing the code.
+   1. `general-purpose · sonnet · medium`: run `deslop` on the cleanup scope, editing the code. Cleanup scope: the whole diff in round 1; the previous round's fix commits after.
+   2. `general-purpose · sonnet · high`: run `/simplify` on the cleanup scope, editing the code.
    3. Check both edits against the settled decisions in the brief; drop any hunk that undoes one; commit.
-   4. **Review** (parallel), each into `round-<n>/review/`:
-      - The applicable `pr-review-toolkit` agents (`code-reviewer` always; `pr-test-analyzer`, `silent-failure-hunter`, `type-design-analyzer`, `comment-analyzer` when the diff touches tests, error handling, types or comments) `· opus · high`.
+   4. **Review** (parallel), each on the whole diff against the merge base, into `round-<n>/review/`:
       - `general-purpose · opus · high`: `thermo` on the diff.
-      - `general-purpose · opus · high`: `code-review` against the merge base, with the brief's requirements as the spec.
+      - `pr-review-toolkit:code-reviewer · opus · high`: bugs and the repo's rules from every `AGENTS.md` and `CLAUDE.md` (root and nested in touched directories) and the standards docs the brief names.
       - `general-purpose · opus · high`: the code against the requirements and `hld.md`: gaps, scope creep (behaviour no requirement asks for), and for each code and HLD mismatch, which one is wrong.
       - The queued reviewer and bot threads.
    5. `Plan · opus · high`, Validate and plan prompt → `round-<n>/plan.md`.
@@ -58,10 +58,15 @@ metadata:
    9. `general-purpose · sonnet · high`, one fresh agent per commit, Fix prompt, in parallel when files are disjoint: each new test fails without its change and passes with it.
    10. Commit each; write the HLD notes; run the checks; on a PR, push.
    - Gate: the checks pass; a failing commit goes back to a fresh Fix agent with the failure output until green.
-3. **Test-audit** (after the last round)
+3. **Final pass** (only when the cap ended the loop on a round that applied fixes), into `round-<N+1>/`
+   - Round steps 1 to 5, with no fix step; on a PR, push the cleanup commit. The plan's findings go to the End list for the user.
+4. **Test-audit** (after the last round or the Final pass)
    - `general-purpose · opus · high`: run `test-audit` on the PR's tests, keeping every test that alone guards a requirement.
    - Commit, run the checks; on a PR, push.
-4. **End** (sequential)
-   - On a PR: `general-purpose · sonnet · high` updates the body in the repo profile's shape, then runs `humanizer` on it; show the drafted thread replies, and post and resolve them per `$CLAUDE_CONFIG_DIR/skills/review/references/posting.md` after the user's OK.
+5. **End** (sequential)
+   - On a PR: `general-purpose · sonnet · high` updates the body in the repo profile's shape, then runs `humanizer` on it.
+   - On a PR: `general-purpose · sonnet · high`: collect the reply drafts from every round's `plan.md`; check each against the final diff, so a `Fixed in <sha>` names the commit that holds the fix now and a reply whose fix later changed is redrafted; run `humanizer` on them → `replies.md`.
+   - On a PR: show all replies together per `$CLAUDE_CONFIG_DIR/skills/review/references/posting.md` (Checkpoint); on the user's one OK for the batch, post them.
+   - On a PR: list every replied thread with its link and ask once "Resolve all <N>?"; on yes, resolve them all per `$CLAUDE_CONFIG_DIR/skills/review/references/api.md`.
    - Stop the monitor.
-   - Tell the user one line per round (found, fixed, skipped, folded, stacked), then list each decision from `decisions.md` with its reason, the stacked PRs set up, and any collisions left past the stack cap.
+   - Tell the user the rounds run and why the loop stopped (a clean round or the cap), one line per round (found, fixed, skipped, folded, stacked), the Final pass's findings, then list each decision from `decisions.md` with its reason, the stacked PRs set up, any collisions left past the stack cap, and each replied thread still unresolved, with its link.

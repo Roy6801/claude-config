@@ -35,7 +35,7 @@ gh api -X POST repos/{owner}/{repo}/pulls/{n}/comments/{comment_id}/replies -F b
 
 `{comment_id}` is the id of any comment in the thread (use the first). Replies post one call each: post the approved batch one reply at a time, stop at the first failure, and report what landed and what did not.
 
-## Resolving a thread (own PR only, per-thread approval)
+## Resolving a thread (own PR only, after the user's yes)
 
 ```bash
 gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100){nodes{id isResolved comments(first:1){nodes{url}}}}}}}' -F o=<owner> -F r=<repo> -F n=<n>
